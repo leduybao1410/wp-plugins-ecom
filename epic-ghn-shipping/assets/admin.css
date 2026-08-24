@@ -1,0 +1,337 @@
+/* EPIC GHN Shipping Manager — admin styles */
+
+.epic-ghn-address-group {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.epic-ghn-address-group .epic-ghn-select {
+	min-width: 160px;
+	flex: 1 1 160px;
+}
+
+/*
+ * Ward combo (text input + a JS-rendered suggestion list) — see
+ * class-assets.php's render_address_group()/render_new_address_group() for
+ * why ward is a searchable free-text field instead of a <select>:
+ * district/province ward lists are often too long to scroll through
+ * comfortably, and native <datalist> can't filter them in an
+ * accent-insensitive way. assets/admin.js's wireCombo() drives the list
+ * below live, as the user types.
+ */
+.epic-ghn-combo {
+	box-sizing: border-box;
+	width: 100%;
+}
+
+.epic-ghn-combo-wrap {
+	position: relative;
+	display: inline-block;
+	min-width: 160px;
+	flex: 1 1 160px;
+}
+
+.epic-ghn-metabox .epic-ghn-combo-wrap {
+	display: block;
+	width: 100%;
+}
+
+.epic-ghn-combo-suggestions {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	margin: 2px 0 0;
+	padding: 2px 0;
+	max-height: 260px;
+	overflow-y: auto;
+	background: #fff;
+	border: 1px solid #8c8f94;
+	border-radius: 2px;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+	list-style: none;
+}
+
+.epic-ghn-combo-option {
+	padding: 6px 10px;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.epic-ghn-combo-option:hover,
+.epic-ghn-combo-option.is-active {
+	background: #2271b1;
+	color: #fff;
+}
+
+.epic-ghn-metabox .epic-ghn-address-group {
+	flex-direction: column;
+}
+
+.epic-ghn-metabox .epic-ghn-select {
+	width: 100%;
+}
+
+.epic-ghn-metabox .epic-ghn-actions {
+	display: flex;
+	gap: 6px;
+	margin: 8px 0;
+}
+
+.epic-ghn-metabox .epic-ghn-actions .button {
+	flex: 1 1 auto;
+	justify-content: center;
+}
+
+.epic-ghn-danger {
+	color: #b32d2e;
+	border-color: #b32d2e !important;
+}
+
+.epic-ghn-danger:hover {
+	background: #b32d2e !important;
+	color: #fff !important;
+}
+
+.epic-ghn-tracking-code {
+	font-size: 13px;
+	padding: 2px 6px;
+}
+
+.epic-ghn-resolved-address {
+	color: #1e7e34;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.epic-ghn-inline-notice {
+	margin: 8px 0 !important;
+	padding: 8px 12px !important;
+}
+
+.epic-ghn-feedback {
+	font-size: 12px;
+	font-style: italic;
+	color: #555;
+	min-height: 16px;
+}
+
+.epic-ghn-feedback-error {
+	color: #b32d2e;
+	font-style: normal;
+	font-weight: 600;
+}
+
+/* Bundle review & confirm screen (class-bundle-admin-page.php) */
+
+.epic-ghn-bundle-table {
+	border-collapse: collapse;
+	width: 100%;
+	max-width: 900px;
+	margin: 12px 0;
+}
+
+.epic-ghn-bundle-table th,
+.epic-ghn-bundle-table td {
+	border: 1px solid #dcdcde;
+	padding: 8px 10px;
+	text-align: left;
+	vertical-align: top;
+}
+
+.epic-ghn-bundle-mismatch {
+	background: #fcf0f1;
+}
+
+.epic-ghn-bundle-diff {
+	color: #b32d2e;
+	font-size: 12px;
+	margin: 4px 0;
+}
+
+.epic-ghn-bundle-dropped {
+	color: #b32d2e;
+	list-style: disc;
+	margin-left: 20px;
+}
+
+.epic-ghn-bundle-summary {
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	padding: 12px 16px;
+	margin: 16px 0;
+	max-width: 520px;
+}
+
+.epic-ghn-bundle-summary p {
+	margin: 4px 0;
+}
+
+.epic-ghn-bundle-dims input[type="number"] {
+	width: 80px;
+}
+
+/* Orders list — "Shipment" status column (class-orders-list.php) */
+
+.epic-ghn-shipment-cell {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.epic-ghn-status-none {
+	color: #787c82;
+	font-weight: 400;
+	padding: 0;
+}
+
+.epic-ghn-status-created,
+.epic-ghn-status-pending {
+	background: #f0f6fc;
+	color: #1d4f8c;
+}
+
+.epic-ghn-status-delivering {
+	background: #fff8e5;
+	color: #8a6100;
+}
+
+.epic-ghn-status-done {
+	background: #edfaef;
+	color: #1e7e34;
+}
+
+.epic-ghn-status-cancelled,
+.epic-ghn-status-issue {
+	background: #fcf0f1;
+	color: #b32d2e;
+}
+
+.epic-ghn-status-returning,
+.epic-ghn-status-returned {
+	background: #f3f1fb;
+	color: #5b3fa0;
+}
+
+.epic-ghn-status-unknown {
+	background: #f0f0f1;
+	color: #50575e;
+}
+
+.epic-ghn-shipment-bundle-badge {
+	display: inline-block;
+	margin-left: 4px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: 11px;
+	background: #f0f0f1;
+	color: #50575e;
+}
+
+/* Orders list — "COD" column chip */
+
+.epic-ghn-cod-chip {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 10px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.epic-ghn-cod-yes {
+	background: #fff8e5;
+	color: #8a6100;
+}
+
+.epic-ghn-cod-no {
+	background: #edfaef;
+	color: #1e7e34;
+}
+
+/* New-format (post-2025-merger) address picker + conversion (class-legacy-address.php) */
+
+.epic-ghn-address-picker-wrap {
+	margin-bottom: 8px;
+}
+
+.epic-ghn-new-address-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.epic-ghn-metabox .epic-ghn-new-address-group {
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.epic-ghn-new-address-group .epic-ghn-select {
+	min-width: 160px;
+	flex: 1 1 160px;
+}
+
+.epic-ghn-new-address-wrap {
+	margin-top: 6px;
+	padding: 8px 10px;
+	border: 1px dashed #dcdcde;
+}
+
+.epic-ghn-toggle-new-address {
+	font-size: 12px;
+}
+
+.epic-ghn-convert-feedback {
+	width: 100%;
+	font-size: 12px;
+	font-style: italic;
+	color: #555;
+}
+
+.epic-ghn-convert-choices {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	align-items: center;
+	font-style: normal;
+}
+
+.epic-ghn-convert-choices p {
+	width: 100%;
+	margin: 4px 0;
+}
+
+/* Orders list — "Action" column */
+
+.epic-ghn-list-ship-feedback,
+.epic-ghn-list-print-feedback {
+	display: inline-block;
+	margin-top: 2px;
+}
+
+/*
+ * Orders list — hide WooCommerce's built-in "Origin" column (Order
+ * Attribution, WC 8.5+) outright. class-orders-list.php also tries to strip
+ * it via PHP (unset()-ing the 'origin' key on the manage_edit-shop_order_columns
+ * / woocommerce_shop_order_list_table_columns filters), but that approach
+ * only works if it's guessed the right filter and a late-enough priority —
+ * confirmed via a live site that it wasn't (the column still rendered with
+ * id="origin" / class="column-origin", exactly the key this plugin already
+ * targets, so it must be getting added through some other path this plugin
+ * doesn't hook). CSS doesn't care which PHP hook added the column — this
+ * hides it unconditionally, on both the header <th> and every row's <td>,
+ * whichever screen (legacy or HPOS) or code path put it there.
+ */
+.column-origin {
+	display: none !important;
+}
