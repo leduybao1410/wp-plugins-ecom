@@ -23,6 +23,9 @@ admin notice) to avoid redeclaring classes.
 
 Bundled modules:
 
+* **EPIC Account Linking** — Google-sign-in accounts and their linked
+  WooCommerce order history (auto-linked by billing email, plus manual claim
+  by order code) for the headless website's account area.
 * **EPIC Advanced Coupons** — advanced coupon rules (first-time customer,
   email/phone allowlist, recurring schedule, Buy X Get Y, auto-apply, bulk
   unique codes) plus a redemptions report, and the coupon-quote REST route for
@@ -53,7 +56,7 @@ Bundled modules:
 Every shared secret (REST auth, GHN token/shop ID, order-code key) is stored
 in the WordPress database via the normal settings screens — never hardcoded —
 and each has a matching environment variable on the Next.js website
-(EPIC_PAYMENT_SHARED_SECRET, EPIC_COUPON_SHARED_SECRET,
+(EPIC_ACCOUNT_SHARED_SECRET, EPIC_PAYMENT_SHARED_SECRET, EPIC_COUPON_SHARED_SECRET,
 EPIC_NEWSLETTER_SHARED_SECRET, EPIC_ORDER_CODES_SHARED_SECRET,
 EPIC_REVIEWS_SHARED_SECRET, EPIC_WHOLESALE_SHARED_SECRET).
 
@@ -82,8 +85,9 @@ No — same modules, same class names. Use one or the other.
 == Changelog ==
 
 = 1.0.0 =
-* Initial release. Bundles epic-advanced-coupons 1.2.0, epic-first-order-coupon
-  1.0.0, epic-ghn-shipping 0.10.0, epic-news-product-link 1.0.0,
-  epic-newsletter-subscription 1.2.0, epic-order-codes 1.1.0,
-  epic-order-emails 1.0.1, epic-payment-store 1.0.1, epic-product-reviews 1.1.0,
-  epic-wholesale-inquiries 1.1.0, and the opt-in rest-url-fix module.
+* Initial release. Bundles epic-account-linking 1.0.0, epic-advanced-coupons
+  1.2.0, epic-first-order-coupon 1.0.0, epic-ghn-shipping 0.10.0,
+  epic-news-product-link 1.0.0, epic-newsletter-subscription 1.2.0,
+  epic-order-codes 1.1.0, epic-order-emails 1.0.1, epic-payment-store 1.0.1,
+  epic-product-reviews 1.1.0, epic-wholesale-inquiries 1.1.0, and the opt-in
+  rest-url-fix module.

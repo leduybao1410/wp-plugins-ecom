@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       EPIC WooCommerce Suite
  * Plugin URI:        https://github.com/leduybao1410/wp-plugins-ecom
- * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: advanced coupon rules, first-order coupon restriction, GHN shipping manager, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product reviews, and wholesale inquiries. One plugin to activate instead of ten.
+ * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: account linking (Google sign-in order history), advanced coupon rules, first-order coupon restriction, GHN shipping manager, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product reviews, and wholesale inquiries. One plugin to activate instead of ten.
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
@@ -36,6 +36,12 @@ define( 'EPIC_SUITE_MODULES_DIR', EPIC_SUITE_DIR . 'modules/' );
  */
 function epic_suite_modules() {
 	return array(
+		'epic-account-linking'         => array(
+			'main'       => 'epic-account-linking/epic-account-linking.php',
+			'standalone' => 'epic-account-linking/epic-account-linking.php',
+			'sentinel'   => 'EPIC_ACCOUNT_LINKING_VERSION',
+			'label'      => 'EPIC Account Linking',
+		),
 		'epic-advanced-coupons'        => array(
 			'main'       => 'epic-advanced-coupons/epic-advanced-coupons.php',
 			'standalone' => 'epic-advanced-coupons/epic-advanced-coupons.php',
@@ -172,6 +178,10 @@ add_action(
  * dbDelta only), so this works during the activation request itself.
  */
 function epic_suite_activate() {
+	if ( class_exists( 'Epic_Account_Store' ) ) {
+		Epic_Account_Store::install();
+	}
+
 	if ( class_exists( 'Epic_Adv_Coupons_Redemption_Log' ) ) {
 		Epic_Adv_Coupons_Redemption_Log::install();
 	}
