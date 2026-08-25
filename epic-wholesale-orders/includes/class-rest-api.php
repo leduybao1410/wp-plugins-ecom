@@ -227,25 +227,10 @@ class Epic_Wholesale_Orders_Rest_Api {
 			return null;
 		}
 
-		$attributes = array();
-		foreach ( $variation->get_attributes() as $taxonomy => $term_slug ) {
-			$label = wc_attribute_label( $taxonomy, $variation );
-			$value = is_taxonomy( $taxonomy ) ? wc_get_product_terms( $variation->get_parent_id(), $taxonomy, array( 'fields' => 'names' ) ) : '';
-			if ( is_array( $value ) ) {
-				$value = implode( ', ', $value );
-			}
-			if ( '' === $value ) {
-				$value = strtolower( $term_slug );
-			}
-			$attributes[] = $label . ': ' . $value;
-		}
-
-		$parent = wc_get_product( $variation->get_parent_id() );
-
 		return array(
 			'id'                 => $variation->get_id(),
 			'parent_id'          => $variation->get_parent_id(),
-			'name'               => ( $parent ? $parent->get_name() : '' ) . ( $attributes ? ' — ' . implode( ', ', $attributes ) : '' ),
+			'name'               => self::variation_display_name( $variation ),
 			'sku'                => (string) $variation->get_sku(),
 			'wholesale_price'    => (float) $price,
 			'wholesale_price_html' => html_entity_decode( (string) wp_strip_all_tags( wc_price( $price ) ) ),
@@ -255,6 +240,30 @@ class Epic_Wholesale_Orders_Rest_Api {
 			'stock_status'       => $variation->get_stock_status(),
 			'stock_quantity'     => $variation->managing_stock() ? (int) $variation->get_stock_quantity() : null,
 		);
+	}
+
+	/**
+	 * "Parent — Attribute: Value, Attribute: Value" for a variation. The
+	 * attribute value from get_attributes() is the term SLUG for taxonomy
+	 * attributes — resolve it to its display name; custom attributes already
+	 * carry their option text.
+	 */
+	private static function variation_display_name( \WC_Product_Variation $variation ) {
+		$parent = wc_get_product( $variation->get_parent_id() );
+
+		$attributes = array();
+		foreach ( $variation->get_attributes() as $taxonomy => $value ) {
+			$label = wc_attribute_label( $taxonomy, $variation );
+			if ( is_taxonomy( $taxonomy ) ) {
+				$term = get_term_by( 'slug', (string) $value, $taxonomy );
+				if ( $term ) {
+					$value = $term->name;
+				}
+			}
+			$attributes[] = $label . ': ' . (string) $value;
+		}
+
+		return ( $parent ? $parent->get_name() : '' ) . ( $attributes ? ' — ' . implode( ', ', $attributes ) : '' );
 	}
 
 	private static function product_image_url( \WC_Product $product ) {
@@ -324,7 +333,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 
 			$items[] = array(
 				'product_id'  => $product_id,
-				'name'        => $product->get_name(),
+				'name'        => $product->is_type( 'variation' ) ? self::variation_display_name( $product ) : $product->get_name(),
 				'sku'         => (string) $product->get_sku(),
 				'quantity'    => $quantity,
 				'unit_price'  => (float) $unit_price,

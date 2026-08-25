@@ -137,19 +137,19 @@ class Epic_Wholesale_Orders_Store {
 				'show_in_menu'    => false,
 				'show_in_rest'    => false,
 				'supports'        => array( 'title' ),
+				// Standard 'post' caps — NOT aliased to `manage_woocommerce`.
+				// Registering this CPT with `map_meta_cap => true` and all
+				// capabilities pointed at `manage_woocommerce` writes
+				// `$post_type_meta_caps['manage_woocommerce'] = 'delete_post'`
+				// (see _post_type_meta_capabilities()), which makes WP translate
+				// EVERY bare `current_user_can('manage_woocommerce')` into
+				// `delete_post` (→ do_not_allow without a post arg). That
+				// silently revoked the cap for all administrators site-wide —
+				// it even locked WooCommerce's own Settings screen. Access is
+				// still fully gated: every entry point (menu page, list-table
+				// delete, order metabox save, product pricing save) checks
+				// `current_user_can('manage_woocommerce')` itself.
 				'capability_type' => 'post',
-				'map_meta_cap'    => true,
-				'capabilities'    => array(
-					'create_posts'       => 'manage_woocommerce',
-					'edit_post'          => 'manage_woocommerce',
-					'read_post'          => 'manage_woocommerce',
-					'delete_post'        => 'manage_woocommerce',
-					'edit_posts'         => 'manage_woocommerce',
-					'edit_others_posts'  => 'manage_woocommerce',
-					'publish_posts'      => 'manage_woocommerce',
-					'read_private_posts' => 'manage_woocommerce',
-					'delete_posts'       => 'manage_woocommerce',
-				),
 			)
 		);
 	}
