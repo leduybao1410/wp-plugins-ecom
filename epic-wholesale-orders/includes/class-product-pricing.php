@@ -212,4 +212,24 @@ class Epic_Wholesale_Product_Pricing {
 		$price = (string) get_post_meta( (int) $product_id, self::META_PRICE, true );
 		return '' !== $price && is_numeric( $price ) ? (string) $price : '';
 	}
+
+	/**
+	 * The effective wholesale price for a given level: the base wholesale
+	 * price minus the level's discount %. A level with a 0% discount returns
+	 * the base price, so a product with a base price is always orderable at
+	 * every level.
+	 *
+	 * @param int|string $product_id
+	 * @param string     $level_key
+	 * @return string Decimal string, or '' when the base price is unset.
+	 */
+	public static function price_for_level( $product_id, $level_key ) {
+		$base = self::get_price( $product_id );
+		if ( '' === $base ) {
+			return '';
+		}
+		$discount = Epic_Wholesale_Orders_Store::level_discount( $level_key );
+		$price    = (float) $base * ( 1 - ( (float) $discount / 100 ) );
+		return wc_format_decimal( $price );
+	}
 }

@@ -21,7 +21,7 @@ A self-contained WooCommerce plugin (plus a small amount of Next.js front-end) t
 | Question | Decision |
 |---|---|
 | Where it lives | **New self-contained WooCommerce plugin** `epic-wholesale-orders`, matching the `epic-wholesale-inquiries` patterns |
-| Pricing model | **Per-product wholesale price** (one price per product; the same price for every whitelisted user) |
+| Pricing model | **Base wholesale price per product + price levels** — admin defines levels (name + % discount off the base price); each wholesale customer is assigned one level and the storefront shows prices discounted for their level |
 | Eligible products | Admin **selects per product** (checkbox + price on the product edit screen) |
 | User page | **Simple order form** — product list + quantity inputs + note. No cart, no checkout |
 | Order record | **Custom post type** `epic_wholesale_order` |
@@ -81,10 +81,25 @@ File structure, phpdoc style, `require_once`-inside-the-callback conventions, HP
 
 ### 5.2 Wholesale price (product meta)
 - `_epic_wholesale_enabled` = `yes`/`no` (checkbox on product edit screen).
-- `_epic_wholesale_price` = float, empty when not set.
+- `_epic_wholesale_price` = float, empty when not set. This is the **base** wholesale price; a
+  customer's effective price is `base × (1 − level_discount%)`.
 - Metabox **"Wholesale"** on the product editor. Works on **simple products**; for **variable products**
   the same fields appear on each **variation** (meta lives on the variation). v1 keeps this to simple +
   variable; bundle/external product types are out of scope unless already in the catalog.
+
+### 5.5 Price levels
+- Option `epic_wholesale_orders_levels` = levels keyed by stable key (`level_1`, `level_2`, …), each
+  `array( 'key', 'name', 'discount' )` where `discount` is a percentage (0–100) off the base wholesale
+  price. Option `epic_wholesale_orders_default_level` holds the default level for new customers.
+- Customer level = **user meta** `epic_wholesale_level` on each whitelisted WP user; missing/unknown →
+  default level. Helper: `Epic_Wholesale_Orders_Store::get_customer_level()`.
+- Effective price: `Epic_Wholesale_Product_Pricing::price_for_level( $id, $level_key )` =
+  `base × (1 − discount/100)`. A level with 0% discount returns the base price, so a product with a base
+  price is orderable at every level (fallback = base price).
+- Migration: `ensure_levels()` on `plugins_loaded` creates the default level if the option is missing —
+  existing products keep their base prices, existing customers fall back to the default level.
+- Each order snapshots `_level_key` / `_level_name` / `_level_discount` so history shows which level
+  applied; deleting a level never rewrites past orders.
 
 ### 5.3 Wholesale order (CPT `epic_wholesale_order`)
 - `public => false`, `show_ui => true` under the WooCommerce menu, `manage_woocommerce` capability.
@@ -135,10 +150,12 @@ fires on the transitions above, it never overrides a manual `PAID`.
   reveals a **required "Reason" textarea** that persists to `_cancel_reason` — the save is rejected if it's
   empty. (Optional v1.1: fire a customer "status updated" email on either transition.)
 
-### 6.2 `WooCommerce → Wholesale Orders → Settings`
+### 6.2 `WooCommerce → Wholesale Orders → Settings` (same screen)
+- **Price levels**: create/rename/delete levels and set each level's discount % + the default level.
 - **Wholesale customers** picker: searchable multi-select of users, reusing WooCommerce's
-  `wc-enhanced-select` + `WC_AJAX::json_search_customers` (the same AJAX user search the order editor uses)
-  rather than a hand-rolled search. Saved as the user-ID array above.
+  `wc-enhanced-select` + `WC_AJAX::json_search_customers` (the same AJAX user search the order editor uses),
+  plus a per-customer **level** dropdown (defaults to the default level). Saved via nonce-checked
+  admin-post handlers.
 - Informational text explaining how to set product prices and where the customer-facing page lives.
 
 ### 6.3 Product editor

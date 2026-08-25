@@ -32,6 +32,9 @@ class Epic_Wholesale_Orders_Store {
 	const POST_TYPE = 'epic_wholesale_order';
 
 	const OPTION_WHITELIST = 'epic_wholesale_orders_customers';
+	const OPTION_LEVELS       = 'epic_wholesale_orders_levels';
+	const OPTION_DEFAULT_LEVEL = 'epic_wholesale_orders_default_level';
+	const USER_META_LEVEL     = 'epic_wholesale_level';
 
 	// Order statuses (custom post statuses).
 	const STATUS_PENDING   = 'epic_wo_pending';
@@ -54,6 +57,9 @@ class Epic_Wholesale_Orders_Store {
 	const META_PAYMENT_STATUS   = '_payment_status';
 	const META_ADMIN_EMAIL_STATUS   = '_admin_email_status';
 	const META_CUSTOMER_EMAIL_STATUS = '_customer_email_status';
+	const META_LEVEL_KEY      = '_level_key';
+	const META_LEVEL_NAME     = '_level_name';
+	const META_LEVEL_DISCOUNT = '_level_discount';
 
 	/** Valid payment statuses — kept here so no caller hand-rolls strings. */
 	const PAYMENT_STATUSES = array(
@@ -198,6 +204,137 @@ class Epic_Wholesale_Orders_Store {
 	}
 
 	// ------------------------------------------------------------------
+	// Price levels
+	// ------------------------------------------------------------------
+
+	/**
+	 * Default level set, used when the option has never been saved (fresh
+	 * install / migration from the single-price version).
+	 */
+	public static function default_levels() {
+		return array(
+			'level_1' => array(
+				'key'      => 'level_1',
+				'name'     => __( 'Level 1', 'epic-wholesale-orders' ),
+				'discount' => 0,
+			),
+		);
+	}
+
+	/**
+	 * Creates the levels options on first load (no DB migration needed for
+	 * existing installs): existing per-product prices stay as the base
+	 * wholesale price, and existing whitelisted customers fall back to the
+	 * default level via get_customer_level().
+	 */
+	public static function ensure_levels() {
+		if ( false === get_option( self::OPTION_LEVELS ) ) {
+			update_option( self::OPTION_LEVELS, self::default_levels() );
+			update_option( self::OPTION_DEFAULT_LEVEL, 'level_1' );
+		}
+	}
+
+	/**
+	 * @return array Levels keyed by level key: array( 'key', 'name', 'discount' ).
+	 */
+	public static function get_levels() {
+		$levels = get_option( self::OPTION_LEVELS, self::default_levels() );
+		if ( ! is_array( $levels ) || empty( $levels ) ) {
+			return self::default_levels();
+		}
+
+		$clean = array();
+		foreach ( $levels as $key => $level ) {
+			if ( ! is_array( $level ) ) {
+				continue;
+			}
+			$key       = (string) $key;
+			$name      = isset( $level['name'] ) ? (string) $level['name'] : '';
+			$discount  = isset( $level['discount'] ) ? (float) $level['discount'] : 0;
+			$discount  = max( 0, min( 100, $discount ) );
+			$clean[ $key ] = array(
+				'key'      => $key,
+				'name'     => '' !== $name ? $name : $key,
+				'discount' => $discount,
+			);
+		}
+
+		return $clean;
+	}
+
+	/** @return array|null One level def, or null when the key is unknown. */
+	public static function get_level( $key ) {
+		$levels = self::get_levels();
+		return isset( $levels[ $key ] ) ? $levels[ $key ] : null;
+	}
+
+	public static function get_default_level_key() {
+		$default = (string) get_option( self::OPTION_DEFAULT_LEVEL, 'level_1' );
+		$levels  = self::get_levels();
+		return isset( $levels[ $default ] ) ? $default : (string) array_key_first( $levels );
+	}
+
+	/**
+	 * Replaces the whole level set (name + discount per level). Admin UI only.
+	 *
+	 * @param array $levels Levels keyed by key, each array( 'name', 'discount' ).
+	 * @param string $default_key Which level is the default for new customers.
+	 */
+	public static function save_levels( array $levels, $default_key ) {
+		$clean = array();
+		foreach ( $levels as $key => $level ) {
+			$key      = sanitize_key( (string) $key );
+			if ( '' === $key ) {
+				continue;
+			}
+			$name     = isset( $level['name'] ) ? sanitize_text_field( (string) $level['name'] ) : '';
+			$discount = isset( $level['discount'] ) ? (float) $level['discount'] : 0;
+			$discount = max( 0, min( 100, $discount ) );
+			$clean[ $key ] = array(
+				'key'      => $key,
+				'name'     => '' !== $name ? $name : $key,
+				'discount' => $discount,
+			);
+		}
+
+		if ( empty( $clean ) ) {
+			$clean = self::default_levels();
+		}
+
+		$default_key = sanitize_key( (string) $default_key );
+		if ( ! isset( $clean[ $default_key ] ) ) {
+			$default_key = (string) array_key_first( $clean );
+		}
+
+		update_option( self::OPTION_LEVELS, $clean );
+		update_option( self::OPTION_DEFAULT_LEVEL, $default_key );
+		return true;
+	}
+
+	/** @return string Level key for a user, falling back to the default level. */
+	public static function get_customer_level( $user_id ) {
+		$level = (string) get_user_meta( (int) $user_id, self::USER_META_LEVEL, true );
+		if ( '' === $level || null === self::get_level( $level ) ) {
+			return self::get_default_level_key();
+		}
+		return $level;
+	}
+
+	public static function set_customer_level( $user_id, $level_key ) {
+		$level_key = sanitize_key( (string) $level_key );
+		if ( null === self::get_level( $level_key ) ) {
+			$level_key = self::get_default_level_key();
+		}
+		return update_user_meta( (int) $user_id, self::USER_META_LEVEL, $level_key );
+	}
+
+	/** @return float Percent discount for a level key (0–100). */
+	public static function level_discount( $key ) {
+		$level = self::get_level( $key );
+		return $level ? (float) $level['discount'] : 0;
+	}
+
+	// ------------------------------------------------------------------
 	// Order CRUD
 	// ------------------------------------------------------------------
 
@@ -211,9 +348,12 @@ class Epic_Wholesale_Orders_Store {
 	 * @param string $note             Customer/seller note (plain text).
 	 * @param string $customer_name
 	 * @param string $customer_email
+	 * @param string $level_key        Level applied when the prices were computed (snapshot).
+	 * @param string $level_name
+	 * @param float  $level_discount
 	 * @return int Post id, or 0 on failure.
 	 */
-	public static function create_order( $customer_user_id, array $items, $note = '', $customer_name = '', $customer_email = '' ) {
+	public static function create_order( $customer_user_id, array $items, $note = '', $customer_name = '', $customer_email = '', $level_key = '', $level_name = '', $level_discount = 0 ) {
 		$total = 0.0;
 		foreach ( $items as $item ) {
 			$total += (float) $item['line_total'];
@@ -255,6 +395,9 @@ class Epic_Wholesale_Orders_Store {
 		update_post_meta( $post_id, self::META_NOTE, (string) $note );
 		update_post_meta( $post_id, self::META_TOTAL, (string) $total );
 		update_post_meta( $post_id, self::META_PAYMENT_STATUS, self::PAYMENT_PENDING );
+		update_post_meta( $post_id, self::META_LEVEL_KEY, (string) $level_key );
+		update_post_meta( $post_id, self::META_LEVEL_NAME, (string) $level_name );
+		update_post_meta( $post_id, self::META_LEVEL_DISCOUNT, (float) $level_discount );
 		update_post_meta( $post_id, self::META_ADMIN_EMAIL_STATUS, 'pending' );
 		update_post_meta( $post_id, self::META_CUSTOMER_EMAIL_STATUS, 'pending' );
 
@@ -336,6 +479,9 @@ class Epic_Wholesale_Orders_Store {
 			'note'           => (string) get_post_meta( $post_id, self::META_NOTE, true ),
 			'cancel_reason'  => (string) get_post_meta( $post_id, self::META_CANCEL_REASON, true ),
 			'total'          => (float) get_post_meta( $post_id, self::META_TOTAL, true ),
+			'level_key'      => (string) get_post_meta( $post_id, self::META_LEVEL_KEY, true ),
+			'level_name'     => (string) get_post_meta( $post_id, self::META_LEVEL_NAME, true ),
+			'level_discount' => (float) get_post_meta( $post_id, self::META_LEVEL_DISCOUNT, true ),
 			'admin_email_status'    => (string) get_post_meta( $post_id, self::META_ADMIN_EMAIL_STATUS, true ),
 			'customer_email_status' => (string) get_post_meta( $post_id, self::META_CUSTOMER_EMAIL_STATUS, true ),
 		);

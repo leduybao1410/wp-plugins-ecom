@@ -9,6 +9,7 @@
  * @var array    $items
  * @var string   $note
  * @var float    $total
+ * @var string   $level_name
  * @var string   $email_heading
  * @var string   $additional_content
  * @var WC_Email $email
@@ -63,6 +64,10 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 
 <?php if ( $note ) : ?>
 	<p><strong><?php esc_html_e( 'Ghi chú của bạn', 'epic-wholesale-orders' ); ?>:</strong><br/><?php echo esc_html( $note ); ?></p>
+<?php endif; ?>
+
+<?php if ( $level_name ) : ?>
+	<p><strong><?php esc_html_e( 'Mức giá', 'epic-wholesale-orders' ); ?>:</strong> <?php echo esc_html( $level_name ); ?></p>
 <?php endif; ?>
 
 <p style="margin-top:24px;">

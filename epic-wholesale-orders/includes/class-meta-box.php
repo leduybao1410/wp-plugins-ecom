@@ -86,6 +86,21 @@ class Epic_Wholesale_Order_Meta_Box {
 		<p>
 			<strong><?php esc_html_e( 'Total', 'epic-wholesale-orders' ); ?>:</strong>
 			<span class="epic-wo-total"><?php echo wp_kses_post( wc_price( $order['total'] ) ); ?></span>
+			<?php if ( $order['level_name'] ) : ?>
+				&nbsp;·&nbsp;
+				<span>
+					<?php
+					printf(
+						/* translators: %s: pricing level name */
+						esc_html__( 'Level: %s', 'epic-wholesale-orders' ),
+						esc_html( $order['level_name'] )
+					);
+					?>
+					<?php if ( $order['level_discount'] > 0 ) : ?>
+						(<?php echo esc_html( (float) $order['level_discount'] ); ?>%)
+					<?php endif; ?>
+				</span>
+			<?php endif; ?>
 		</p>
 
 		<?php if ( $order['note'] ) : ?>

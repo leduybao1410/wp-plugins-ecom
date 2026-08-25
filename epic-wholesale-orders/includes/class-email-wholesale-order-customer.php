@@ -20,6 +20,7 @@ class Epic_Email_Wholesale_Order_Customer extends WC_Email {
 	public $items = array();
 	public $note = '';
 	public $total = 0;
+	public $level_name = '';
 
 	public function __construct() {
 		$this->id          = 'epic_wholesale_order_customer';
@@ -64,6 +65,7 @@ class Epic_Email_Wholesale_Order_Customer extends WC_Email {
 		$this->items          = isset( $order['items'] ) && is_array( $order['items'] ) ? $order['items'] : array();
 		$this->note           = isset( $order['note'] ) ? (string) $order['note'] : '';
 		$this->total          = isset( $order['total'] ) ? (float) $order['total'] : 0;
+		$this->level_name     = isset( $order['level_name'] ) ? (string) $order['level_name'] : '';
 
 		$this->placeholders['{order_number}'] = $this->order_number;
 
@@ -105,6 +107,7 @@ class Epic_Email_Wholesale_Order_Customer extends WC_Email {
 				'items'              => $this->items,
 				'note'               => $this->note,
 				'total'              => $this->total,
+				'level_name'         => $this->level_name,
 				'email_heading'      => $this->get_heading(),
 				'additional_content' => $this->get_additional_content(),
 				'sent_to_admin'      => false,
@@ -125,6 +128,7 @@ class Epic_Email_Wholesale_Order_Customer extends WC_Email {
 				'items'              => $this->items,
 				'note'               => $this->note,
 				'total'              => $this->total,
+				'level_name'         => $this->level_name,
 				'email_heading'      => $this->get_heading(),
 				'additional_content' => $this->get_additional_content(),
 				'sent_to_admin'      => false,

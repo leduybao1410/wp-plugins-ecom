@@ -40,6 +40,7 @@ class Epic_Wholesale_Orders_List_Table extends WP_List_Table {
 			'order_ref'  => __( 'Order', 'epic-wholesale-orders' ),
 			'date'       => __( 'Date', 'epic-wholesale-orders' ),
 			'customer'   => __( 'Customer', 'epic-wholesale-orders' ),
+			'level'      => __( 'Level', 'epic-wholesale-orders' ),
 			'items'      => __( 'Items', 'epic-wholesale-orders' ),
 			'total'      => __( 'Total', 'epic-wholesale-orders' ),
 			'payment'    => __( 'Payment', 'epic-wholesale-orders' ),
@@ -143,6 +144,14 @@ class Epic_Wholesale_Orders_List_Table extends WP_List_Table {
 			$html .= '<br/><a href="mailto:' . esc_attr( $item['customer_email'] ) . '">' . esc_html( $item['customer_email'] ) . '</a>';
 		}
 		return $html;
+	}
+
+	protected function column_level( $item ) {
+		$level = $item['level_name'];
+		if ( ! $level && $item['customer_user_id'] ) {
+			$level = Epic_Wholesale_Orders_Store::get_level( Epic_Wholesale_Orders_Store::get_customer_level( $item['customer_user_id'] ) )['name'] ?? '';
+		}
+		return $level ? esc_html( $level ) : '<span style="color:#999;">&#8212;</span>';
 	}
 
 	protected function column_items( $item ) {

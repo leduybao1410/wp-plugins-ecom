@@ -66,12 +66,17 @@ require_once EPIC_WHOLESALE_ORDERS_DIR . 'includes/class-settings.php';
 // or query them. Safe on the front-end too (REST callbacks rely on it).
 add_action( 'init', array( 'Epic_Wholesale_Orders_Store', 'register_post_type' ) );
 
-add_action(
-	'plugins_loaded',
-	function () {
-		load_plugin_textdomain( 'epic-wholesale-orders', false, dirname( plugin_basename( EPIC_WHOLESALE_ORDERS_PLUGIN_FILE ) ) . '/languages' );
+	add_action(
+		'plugins_loaded',
+		function () {
+			load_plugin_textdomain( 'epic-wholesale-orders', false, dirname( plugin_basename( EPIC_WHOLESALE_ORDERS_PLUGIN_FILE ) ) . '/languages' );
 
-		if ( ! epic_wholesale_orders_is_woocommerce_active() ) {
+			// First-load migration: create the default price level (existing
+			// products keep their base wholesale prices, existing customers
+			// fall back to the default level).
+			Epic_Wholesale_Orders_Store::ensure_levels();
+
+			if ( ! epic_wholesale_orders_is_woocommerce_active() ) {
 			if ( is_admin() ) {
 				add_action( 'admin_notices', 'epic_wholesale_orders_woocommerce_missing_notice' );
 			}

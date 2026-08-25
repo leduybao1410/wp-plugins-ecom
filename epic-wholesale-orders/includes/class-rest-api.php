@@ -126,6 +126,15 @@ class Epic_Wholesale_Orders_Rest_Api {
 			return new \WP_Error( 'epic_wholesale_orders_not_whitelisted', 'This account is not a wholesale customer.', array( 'status' => 403 ) );
 		}
 
+		// The customer's pricing level — every price below is the base
+		// wholesale price discounted by this level's percentage.
+		$level_key = Epic_Wholesale_Orders_Store::get_customer_level( $customer->ID );
+		$level     = Epic_Wholesale_Orders_Store::get_level( $level_key );
+		if ( ! $level ) {
+			$level_key = Epic_Wholesale_Orders_Store::get_default_level_key();
+			$level     = Epic_Wholesale_Orders_Store::get_level( $level_key );
+		}
+
 		$products = array();
 
 		// Simple products (+ any other non-variable product) marked wholesale.
@@ -153,7 +162,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 			if ( $product->is_type( 'variable' ) ) {
 				continue;
 			}
-			$entry = self::product_entry( $product );
+			$entry = self::product_entry( $product, $level_key );
 			if ( $entry ) {
 				$products[] = $entry;
 			}
@@ -183,24 +192,36 @@ class Epic_Wholesale_Orders_Rest_Api {
 			if ( ! $variation ) {
 				continue;
 			}
-			$entry = self::variation_entry( $variation );
+			$entry = self::variation_entry( $variation, $level_key );
 			if ( $entry ) {
 				$products[] = $entry;
 			}
 		}
 
-		return new \WP_REST_Response( array( 'products' => $products ), 200 );
+		return new \WP_REST_Response(
+			array(
+				'products' => $products,
+				'level'    => array(
+					'key'      => $level['key'],
+					'name'     => $level['name'],
+					'discount' => (float) $level['discount'],
+				),
+			),
+			200
+		);
 	}
 
 	/**
 	 * @param \WC_Product $product
+	 * @param string      $level_key
 	 * @return array|null Null when the wholesale price is missing/zero.
 	 */
-	private static function product_entry( \WC_Product $product ) {
-		$price = Epic_Wholesale_Product_Pricing::get_price( $product->get_id() );
-		if ( '' === $price || (float) $price <= 0 ) {
+	private static function product_entry( \WC_Product $product, $level_key ) {
+		$base = Epic_Wholesale_Product_Pricing::get_price( $product->get_id() );
+		if ( '' === $base || (float) $base <= 0 ) {
 			return null;
 		}
+		$price = Epic_Wholesale_Product_Pricing::price_for_level( $product->get_id(), $level_key );
 
 		return array(
 			'id'                 => $product->get_id(),
@@ -208,6 +229,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 			'name'               => $product->get_name(),
 			'sku'                => (string) $product->get_sku(),
 			'wholesale_price'    => (float) $price,
+			'base_wholesale_price' => (float) $base,
 			'wholesale_price_html' => html_entity_decode( (string) wp_strip_all_tags( wc_price( $price ) ) ),
 			'regular_price'      => $product->get_regular_price() !== '' ? (float) $product->get_regular_price() : null,
 			'image_url'          => self::product_image_url( $product ),
@@ -219,13 +241,15 @@ class Epic_Wholesale_Orders_Rest_Api {
 
 	/**
 	 * @param \WC_Product_Variation $variation
+	 * @param string                $level_key
 	 * @return array|null
 	 */
-	private static function variation_entry( \WC_Product_Variation $variation ) {
-		$price = Epic_Wholesale_Product_Pricing::get_price( $variation->get_id() );
-		if ( '' === $price || (float) $price <= 0 ) {
+	private static function variation_entry( \WC_Product_Variation $variation, $level_key ) {
+		$base = Epic_Wholesale_Product_Pricing::get_price( $variation->get_id() );
+		if ( '' === $base || (float) $base <= 0 ) {
 			return null;
 		}
+		$price = Epic_Wholesale_Product_Pricing::price_for_level( $variation->get_id(), $level_key );
 
 		return array(
 			'id'                 => $variation->get_id(),
@@ -233,6 +257,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 			'name'               => self::variation_display_name( $variation ),
 			'sku'                => (string) $variation->get_sku(),
 			'wholesale_price'    => (float) $price,
+			'base_wholesale_price' => (float) $base,
 			'wholesale_price_html' => html_entity_decode( (string) wp_strip_all_tags( wc_price( $price ) ) ),
 			'regular_price'      => $variation->get_regular_price() !== '' ? (float) $variation->get_regular_price() : null,
 			'image_url'          => self::product_image_url( $variation ),
@@ -303,6 +328,15 @@ class Epic_Wholesale_Orders_Rest_Api {
 
 		$note = isset( $params['note'] ) ? sanitize_textarea_field( (string) $params['note'] ) : '';
 
+		// The customer's pricing level — prices below are computed from it and
+		// the level is snapshotted onto the order for the record.
+		$level_key = Epic_Wholesale_Orders_Store::get_customer_level( $customer->ID );
+		$level     = Epic_Wholesale_Orders_Store::get_level( $level_key );
+		if ( ! $level ) {
+			$level_key = Epic_Wholesale_Orders_Store::get_default_level_key();
+			$level     = Epic_Wholesale_Orders_Store::get_level( $level_key );
+		}
+
 		// Recompute everything server-side — never trust client prices.
 		$items = array();
 		$total = 0.0;
@@ -321,14 +355,14 @@ class Epic_Wholesale_Orders_Rest_Api {
 
 			// Variations live under a parent product — allow submitting either
 			// the variation id (preferred) or a simple product id.
-			$wholesale_price = Epic_Wholesale_Product_Pricing::get_price( $product_id );
-			$enabled         = Epic_Wholesale_Product_Pricing::is_enabled( $product_id );
+			$base_price = Epic_Wholesale_Product_Pricing::get_price( $product_id );
+			$enabled    = Epic_Wholesale_Product_Pricing::is_enabled( $product_id );
 
-			if ( ! $enabled || '' === $wholesale_price || (float) $wholesale_price <= 0 ) {
+			if ( ! $enabled || '' === $base_price || (float) $base_price <= 0 ) {
 				return new \WP_Error( 'epic_wholesale_orders_not_eligible', sprintf( 'Product %d is not available for wholesale ordering.', $product_id ), array( 'status' => 400 ) );
 			}
 
-			$unit_price = wc_format_decimal( $wholesale_price );
+			$unit_price = wc_format_decimal( Epic_Wholesale_Product_Pricing::price_for_level( $product_id, $level_key ) );
 			$line_total = wc_format_decimal( (float) $unit_price * $quantity );
 
 			$items[] = array(
@@ -347,7 +381,10 @@ class Epic_Wholesale_Orders_Rest_Api {
 			$items,
 			$note,
 			$customer->display_name,
-			$customer->user_email
+			$customer->user_email,
+			$level['key'],
+			$level['name'],
+			(float) $level['discount']
 		);
 
 		if ( ! $order_id ) {
@@ -413,6 +450,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 			'date_created'   => $order['date_created'],
 			'order_status'   => self::short_order_status( $order['order_status'] ),
 			'payment_status' => $order['payment_status'],
+			'level_name'     => $order['level_name'],
 			'items'          => $order['items'],
 			'note'           => $order['note'],
 			'total'          => $order['total'],
