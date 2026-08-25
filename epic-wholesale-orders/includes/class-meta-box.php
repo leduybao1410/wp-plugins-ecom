@@ -46,7 +46,7 @@ class Epic_Wholesale_Order_Meta_Box {
 		wp_nonce_field( 'epic_wholesale_order_details_' . $post->ID, 'epic_wholesale_order_details_nonce' );
 
 		$cancel_reason = $order['cancel_reason'];
-		$is_cancelled  = Epic_Wholesale_Orders_Store::STATUS_CANCELLED === $order['order_status'];
+		$is_cancelled  = in_array( $order['order_status'], array( Epic_Wholesale_Orders_Store::STATUS_UNAPPROVED, Epic_Wholesale_Orders_Store::STATUS_CANCELLED ), true );
 		?>
 		<style>
 			.epic-wo-items { width: 100%; border-collapse: collapse; }
@@ -119,7 +119,7 @@ class Epic_Wholesale_Order_Meta_Box {
 						<?php endforeach; ?>
 					</select>
 					<p class="description">
-						<?php esc_html_e( 'Marking Done sets payment to "Waiting for payment" (unless already Paid). Cancelling requires a reason and sets payment to "Canceled".', 'epic-wholesale-orders' ); ?>
+						<?php esc_html_e( 'Marking Approved sets payment to "Waiting for payment" (unless already Paid). Unapproving requires a reason and sets payment to "Canceled". Done is the final state and does not change payment.', 'epic-wholesale-orders' ); ?>
 					</p>
 				</td>
 			</tr>
@@ -134,21 +134,42 @@ class Epic_Wholesale_Order_Meta_Box {
 				</td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="epic_wo_cancel_reason"><?php esc_html_e( 'Cancel / unapprove reason', 'epic-wholesale-orders' ); ?></label></th>
+				<th scope="row"><label for="epic_wo_cancel_reason"><?php esc_html_e( 'Unapprove reason', 'epic-wholesale-orders' ); ?></label></th>
 				<td>
 					<textarea
 						id="epic_wo_cancel_reason"
 						name="epic_wo_cancel_reason"
 						rows="3"
 						class="large-text"
-						placeholder="<?php esc_attr_e( 'Required when cancelling or unapproving this order.', 'epic-wholesale-orders' ); ?>"
+						placeholder="<?php esc_attr_e( 'Required when unapproving this order.', 'epic-wholesale-orders' ); ?>"
 					><?php echo esc_textarea( $cancel_reason ); ?></textarea>
 					<?php if ( $is_cancelled ) : ?>
-						<p class="description"><?php esc_html_e( 'This order is cancelled. Re-saving the reason above updates it.', 'epic-wholesale-orders' ); ?></p>
+						<p class="description"><?php esc_html_e( 'This order is unapproved. Re-saving the reason above updates it.', 'epic-wholesale-orders' ); ?></p>
 					<?php endif; ?>
 				</td>
 			</tr>
 		</table>
+
+		<h3><?php esc_html_e( 'Invoice', 'epic-wholesale-orders' ); ?></h3>
+		<?php
+		$invoice_id = (int) $order['invoice_attachment_id'];
+		if ( $invoice_id ) {
+			$invoice_title = get_the_title( $invoice_id );
+			echo '<p>' . esc_html__( 'Current invoice:', 'epic-wholesale-orders' ) . ' <a href="' . esc_url( wp_get_attachment_url( $invoice_id ) ) . '" target="_blank" rel="noopener">' . esc_html( $invoice_title ? $invoice_title : basename( (string) get_attached_file( $invoice_id ) ) ) . '</a></p>';
+		}
+		?>
+		<p>
+			<input type="file" name="epic_wo_invoice" accept=".pdf,.png,.jpg,.jpeg" />
+			<span class="description"><?php esc_html_e( 'PDF, PNG or JPG. One per order — uploading a new file replaces the current invoice.', 'epic-wholesale-orders' ); ?></span>
+		</p>
+		<?php if ( $invoice_id ) : ?>
+			<p>
+				<label>
+					<input type="checkbox" name="epic_wo_remove_invoice" value="yes" />
+					<?php esc_html_e( 'Remove the current invoice', 'epic-wholesale-orders' ); ?>
+				</label>
+			</p>
+		<?php endif; ?>
 		<?php
 	}
 
@@ -178,16 +199,18 @@ class Epic_Wholesale_Order_Meta_Box {
 		$cancel_reason = isset( $_POST['epic_wo_cancel_reason'] ) ? sanitize_textarea_field( wp_unslash( $_POST['epic_wo_cancel_reason'] ) ) : '';
 		$cancel_reason = trim( $cancel_reason );
 
-		// Cancelling/unapproving requires a reason — reject the whole save.
-		if ( Epic_Wholesale_Orders_Store::STATUS_CANCELLED === $posted_status && '' === $cancel_reason ) {
-			self::$errors[] = __( 'To cancel or unapprove this order you must provide a reason.', 'epic-wholesale-orders' );
+		// Unapproving requires a reason — reject the whole save.
+		if ( Epic_Wholesale_Orders_Store::STATUS_UNAPPROVED === $posted_status && '' === $cancel_reason ) {
+			self::$errors[] = __( 'To unapprove this order you must provide a reason.', 'epic-wholesale-orders' );
 			return;
 		}
 
-		// Persist the reason whenever one exists (keeps history on cancel).
+		// Persist the reason whenever one exists (keeps history on rejection).
 		if ( '' !== $cancel_reason ) {
 			update_post_meta( $post_id, Epic_Wholesale_Orders_Store::META_CANCEL_REASON, $cancel_reason );
 		}
+
+		self::maybe_save_invoice( $post_id );
 
 		// Actual status transition: apply the payment auto-rules.
 		if ( $posted_status !== $current_status ) {
@@ -200,6 +223,57 @@ class Epic_Wholesale_Order_Meta_Box {
 		if ( in_array( $posted_payment, Epic_Wholesale_Orders_Store::PAYMENT_STATUSES, true ) ) {
 			update_post_meta( $post_id, Epic_Wholesale_Orders_Store::META_PAYMENT_STATUS, $posted_payment );
 		}
+	}
+
+	/**
+	 * Handles the invoice file on the order: upload (PDF or image, one per
+	 * order — re-upload replaces the previous), or remove when flagged.
+	 */
+	private static function maybe_save_invoice( $post_id ) {
+		$current = (int) get_post_meta( $post_id, Epic_Wholesale_Orders_Store::META_INVOICE_ATTACHMENT, true );
+
+		if ( ! empty( $_POST['epic_wo_remove_invoice'] ) ) {
+			if ( $current && 'yes' === sanitize_key( wp_unslash( $_POST['epic_wo_remove_invoice'] ) ) ) {
+				wp_delete_attachment( $current, true );
+				delete_post_meta( $post_id, Epic_Wholesale_Orders_Store::META_INVOICE_ATTACHMENT );
+			}
+			return;
+		}
+
+		if ( empty( $_FILES['epic_wo_invoice']['name'] ) ) {
+			return; // No new file — keep whatever is already attached.
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+
+		$mimes = array(
+			'pdf'  => 'application/pdf',
+			'png'  => 'image/png',
+			'jpg'  => 'image/jpeg',
+			'jpeg' => 'image/jpeg',
+		);
+
+		$attachment_id = media_handle_upload(
+			'epic_wo_invoice',
+			$post_id,
+			array( 'post_title' => 'Invoice ' . Epic_Wholesale_Orders_Store::order_number_for( $post_id ) ),
+			array(
+				'test_form' => false,
+				'mimes'     => $mimes,
+			)
+		);
+
+		if ( is_wp_error( $attachment_id ) ) {
+			self::$errors[] = __( 'Could not upload the invoice — only PDF, PNG, or JPG files are allowed.', 'epic-wholesale-orders' );
+			return;
+		}
+
+		if ( $current ) {
+			wp_delete_attachment( $current, true );
+		}
+		update_post_meta( $post_id, Epic_Wholesale_Orders_Store::META_INVOICE_ATTACHMENT, (int) $attachment_id );
 	}
 
 	public static function print_errors() {

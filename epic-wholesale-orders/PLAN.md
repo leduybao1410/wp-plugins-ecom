@@ -29,7 +29,8 @@ A self-contained WooCommerce plugin (plus a small amount of Next.js front-end) t
 | Price visibility | Wholesale prices shown **only on the wholesale page** |
 | After submit | Email admin **and** customer; order starts in order status `pending`; customer sees order history |
 | Payment status | Admin-configurable per order: `WAITING_FOR_PAYMENT`, `PAID`, `PENDING`, `CANCELED` (offline/agreement tracking only — no online payment). Auto-set by the order-status workflow (see §5.3). |
-| Order workflow | `pending` (on submit) → admin marks `done` ⇒ payment auto-set `WAITING_FOR_PAYMENT`; admin cancels/unapproves (note required) ⇒ payment auto-set `CANCELED` |
+| Order workflow | `pending` (on submit) → admin marks `approved` ⇒ payment auto-set `WAITING_FOR_PAYMENT` → `done` (final, no payment change); admin unapproves (reason required) ⇒ payment auto-set `CANCELED` |
+| Invoice | Admin uploads one PDF/image per order (order metabox); the customer sees a **View invoice** link on their dashboard, streamed via an access-controlled REST endpoint (only the order's owner) |
 
 ## 3. Architecture
 
@@ -227,9 +228,10 @@ state (not a hint about the whitelist itself).
   `PENDING`, both emails send (or status shows `failed`/`disabled` correctly), **stock quantity unchanged**,
   no `shop_order` created.
 - Non-whitelisted user → REST `403`, page shows "not available".
-- Order workflow: admin sets status `done` → payment auto-flips to `WAITING_FOR_PAYMENT`; admin cancels →
-  payment auto-flips to `CANCELED` and the save is rejected without a reason note; manual `PAID` is never
-  overwritten by a later status edit. All visible in the list column, the filter, and the customer's history.
+- Order workflow: admin sets status `approved` → payment auto-flips to `WAITING_FOR_PAYMENT`; admin
+  unapproves → payment auto-flips to `CANCELED` and the save is rejected without a reason note; manual `PAID`
+  is never overwritten by a later status edit. `done` is the final state and doesn't change payment. All
+  visible in the list column, the filter, and the customer's history.
 - Prices: admin edits wholesale price → new orders use the new price; existing orders keep their snapshot.
 - Admin: filter by status, view/edit detail, transition status, delete.
 - `wp-phpcs` (WordPress standard) passes on all new plugin files; `npm run lint` / typecheck pass on the

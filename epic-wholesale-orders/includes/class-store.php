@@ -37,9 +37,11 @@ class Epic_Wholesale_Orders_Store {
 	const USER_META_LEVEL     = 'epic_wholesale_level';
 
 	// Order statuses (custom post statuses).
-	const STATUS_PENDING   = 'epic_wo_pending';
-	const STATUS_DONE      = 'epic_wo_done';
-	const STATUS_CANCELLED = 'epic_wo_cancelled';
+	const STATUS_PENDING    = 'epic_wo_pending';
+	const STATUS_APPROVED   = 'epic_wo_approved';
+	const STATUS_DONE       = 'epic_wo_done';
+	const STATUS_UNAPPROVED = 'epic_wo_unapproved';
+	const STATUS_CANCELLED  = 'epic_wo_cancelled'; // Legacy — superseded by unapproved; kept for old orders.
 
 	// Payment statuses (post meta `_payment_status`).
 	const PAYMENT_WAITING_FOR_PAYMENT = 'WAITING_FOR_PAYMENT';
@@ -60,6 +62,7 @@ class Epic_Wholesale_Orders_Store {
 	const META_LEVEL_KEY      = '_level_key';
 	const META_LEVEL_NAME     = '_level_name';
 	const META_LEVEL_DISCOUNT = '_level_discount';
+	const META_INVOICE_ATTACHMENT = '_invoice_attachment_id';
 
 	/** Valid payment statuses — kept here so no caller hand-rolls strings. */
 	const PAYMENT_STATUSES = array(
@@ -71,9 +74,10 @@ class Epic_Wholesale_Orders_Store {
 
 	public static function order_statuses() {
 		return array(
-			self::STATUS_PENDING   => __( 'Pending', 'epic-wholesale-orders' ),
-			self::STATUS_DONE      => __( 'Done', 'epic-wholesale-orders' ),
-			self::STATUS_CANCELLED => __( 'Cancelled', 'epic-wholesale-orders' ),
+			self::STATUS_PENDING    => __( 'Pending', 'epic-wholesale-orders' ),
+			self::STATUS_APPROVED   => __( 'Approved', 'epic-wholesale-orders' ),
+			self::STATUS_DONE       => __( 'Done', 'epic-wholesale-orders' ),
+			self::STATUS_UNAPPROVED => __( 'Unapproved', 'epic-wholesale-orders' ),
 		);
 	}
 
@@ -103,9 +107,31 @@ class Epic_Wholesale_Orders_Store {
 			)
 		);
 		register_post_status(
+			self::STATUS_APPROVED,
+			array(
+				'label'                     => __( 'Approved', 'epic-wholesale-orders' ),
+				'public'                    => false,
+				'internal'                  => true,
+				'exclude_from_search'       => true,
+				'show_in_admin_all_list'    => false,
+				'show_in_admin_status_list' => false,
+			)
+		);
+		register_post_status(
 			self::STATUS_DONE,
 			array(
 				'label'                     => __( 'Done', 'epic-wholesale-orders' ),
+				'public'                    => false,
+				'internal'                  => true,
+				'exclude_from_search'       => true,
+				'show_in_admin_all_list'    => false,
+				'show_in_admin_status_list' => false,
+			)
+		);
+		register_post_status(
+			self::STATUS_UNAPPROVED,
+			array(
+				'label'                     => __( 'Unapproved', 'epic-wholesale-orders' ),
 				'public'                    => false,
 				'internal'                  => true,
 				'exclude_from_search'       => true,
@@ -435,13 +461,16 @@ class Epic_Wholesale_Orders_Store {
 		$payment = get_post_meta( $post_id, self::META_PAYMENT_STATUS, true );
 		$payment = in_array( $payment, self::PAYMENT_STATUSES, true ) ? $payment : self::PAYMENT_PENDING;
 
-		if ( self::STATUS_CANCELLED === $new_status ) {
+		if ( self::STATUS_UNAPPROVED === $new_status ) {
+			// Unapproved (with a required reason) ⇒ payment CANCELED.
 			$payment = self::PAYMENT_CANCELED;
-		} elseif ( self::STATUS_DONE === $new_status && self::PAYMENT_PAID !== $payment ) {
-			// Done ⇒ waiting for payment, unless the admin already marked it
-			// PAID — a manual PAID is never overwritten.
+		} elseif ( self::STATUS_APPROVED === $new_status && self::PAYMENT_PAID !== $payment ) {
+			// Approved ⇒ waiting for payment, unless the admin already marked
+			// it PAID — a manual PAID is never overwritten.
 			$payment = self::PAYMENT_WAITING_FOR_PAYMENT;
 		}
+		// `done` is the final state and does not touch payment — the admin
+		// marks PAID while the order is approved.
 
 		update_post_meta( $post_id, self::META_PAYMENT_STATUS, $payment );
 	}
@@ -482,6 +511,8 @@ class Epic_Wholesale_Orders_Store {
 			'level_key'      => (string) get_post_meta( $post_id, self::META_LEVEL_KEY, true ),
 			'level_name'     => (string) get_post_meta( $post_id, self::META_LEVEL_NAME, true ),
 			'level_discount' => (float) get_post_meta( $post_id, self::META_LEVEL_DISCOUNT, true ),
+			'invoice_attachment_id' => (int) get_post_meta( $post_id, self::META_INVOICE_ATTACHMENT, true ),
+			'has_invoice'    => (int) get_post_meta( $post_id, self::META_INVOICE_ATTACHMENT, true ) > 0,
 			'admin_email_status'    => (string) get_post_meta( $post_id, self::META_ADMIN_EMAIL_STATUS, true ),
 			'customer_email_status' => (string) get_post_meta( $post_id, self::META_CUSTOMER_EMAIL_STATUS, true ),
 		);
@@ -497,7 +528,7 @@ class Epic_Wholesale_Orders_Store {
 		$query = new WP_Query(
 			array(
 				'post_type'      => self::POST_TYPE,
-				'post_status'    => array( self::STATUS_PENDING, self::STATUS_DONE, self::STATUS_CANCELLED ),
+				'post_status'    => array( self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_DONE, self::STATUS_UNAPPROVED, self::STATUS_CANCELLED ),
 				'meta_key'       => self::META_CUSTOMER_USER_ID,
 				'meta_value'     => (int) $user_id,
 				'meta_compare'   => '=',
@@ -525,7 +556,7 @@ class Epic_Wholesale_Orders_Store {
 	public static function query_orders( array $args ) {
 		$defaults = array(
 			'post_type'      => self::POST_TYPE,
-			'post_status'    => array( self::STATUS_PENDING, self::STATUS_DONE, self::STATUS_CANCELLED ),
+			'post_status'    => array( self::STATUS_PENDING, self::STATUS_APPROVED, self::STATUS_DONE, self::STATUS_UNAPPROVED, self::STATUS_CANCELLED ),
 			'posts_per_page' => 20,
 			'paged'          => 1,
 			'orderby'        => 'date',

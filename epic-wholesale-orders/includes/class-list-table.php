@@ -71,7 +71,9 @@ class Epic_Wholesale_Orders_List_Table extends WP_List_Table {
 			'post_type'      => Epic_Wholesale_Orders_Store::POST_TYPE,
 			'post_status'    => array(
 				Epic_Wholesale_Orders_Store::STATUS_PENDING,
+				Epic_Wholesale_Orders_Store::STATUS_APPROVED,
 				Epic_Wholesale_Orders_Store::STATUS_DONE,
+				Epic_Wholesale_Orders_Store::STATUS_UNAPPROVED,
 				Epic_Wholesale_Orders_Store::STATUS_CANCELLED,
 			),
 			'posts_per_page' => self::PER_PAGE,
@@ -225,9 +227,11 @@ class Epic_Wholesale_Orders_List_Table extends WP_List_Table {
 
 	private function badge( $value, array $map ) {
 		$colors = array(
-			Epic_Wholesale_Orders_Store::STATUS_PENDING => '#666666',
-			Epic_Wholesale_Orders_Store::STATUS_DONE    => '#1a7f37',
-			Epic_Wholesale_Orders_Store::STATUS_CANCELLED => '#c0392b',
+			Epic_Wholesale_Orders_Store::STATUS_PENDING    => '#666666',
+			Epic_Wholesale_Orders_Store::STATUS_APPROVED   => '#1a7f37',
+			Epic_Wholesale_Orders_Store::STATUS_DONE       => '#0e7490',
+			Epic_Wholesale_Orders_Store::STATUS_UNAPPROVED => '#c0392b',
+			Epic_Wholesale_Orders_Store::STATUS_CANCELLED  => '#c0392b',
 			Epic_Wholesale_Orders_Store::PAYMENT_WAITING_FOR_PAYMENT => '#b45309',
 			Epic_Wholesale_Orders_Store::PAYMENT_PAID                => '#1a7f37',
 			Epic_Wholesale_Orders_Store::PAYMENT_PENDING             => '#666666',

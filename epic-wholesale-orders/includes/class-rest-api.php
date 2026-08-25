@@ -57,6 +57,16 @@ class Epic_Wholesale_Orders_Rest_Api {
 				'permission_callback' => array( __CLASS__, 'check_secret' ),
 			)
 		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/orders/(?P<order_id>\d+)/invoice',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'get_invoice' ),
+				'permission_callback' => array( __CLASS__, 'check_secret' ),
+			)
+		);
 	}
 
 	/** Constant-time comparison against the secret configured in WooCommerce → Wholesale Orders. */
@@ -426,6 +436,44 @@ class Epic_Wholesale_Orders_Rest_Api {
 		return new \WP_REST_Response( array( 'orders' => $orders ), 200 );
 	}
 
+	/**
+	 * Serves an order's invoice (uploaded by the admin on the order's edit
+	 * screen) to the order's OWNER only — resolved via the verified session
+	 * identity, never via a guessable/shared URL. Returns the file contents
+	 * base64-encoded so the Next.js route handler can stream it to the browser.
+	 */
+	public static function get_invoice( \WP_REST_Request $request ) {
+		$customer = self::resolve_customer(
+			(string) $request->get_param( 'google_sub' ),
+			(string) $request->get_param( 'email' )
+		);
+		if ( ! $customer ) {
+			return new \WP_Error( 'epic_wholesale_orders_no_account', 'No account found for this session.', array( 'status' => 403 ) );
+		}
+
+		$order = Epic_Wholesale_Orders_Store::get_order( (int) $request->get_param( 'order_id' ) );
+		if ( ! $order || (int) $order['customer_user_id'] !== (int) $customer->ID ) {
+			// 404 both for "no such order" and "not your order" — never reveal
+			// an order the caller has no access to.
+			return new \WP_Error( 'epic_wholesale_orders_invoice_not_found', 'No invoice available.', array( 'status' => 404 ) );
+		}
+
+		$attachment_id = (int) $order['invoice_attachment_id'];
+		$file          = $attachment_id ? get_attached_file( $attachment_id ) : false;
+		if ( ! $file || ! file_exists( $file ) ) {
+			return new \WP_Error( 'epic_wholesale_orders_invoice_not_found', 'No invoice available.', array( 'status' => 404 ) );
+		}
+
+		return new \WP_REST_Response(
+			array(
+				'filename'   => $attachment_id ? get_the_title( $attachment_id ) : basename( $file ),
+				'mime'       => $attachment_id ? (string) get_post_mime_type( $attachment_id ) : 'application/octet-stream',
+				'data_base64' => base64_encode( (string) file_get_contents( $file ) ),
+			),
+			200
+		);
+	}
+
 	// ------------------------------------------------------------------
 	// Serialization
 	// ------------------------------------------------------------------
@@ -433,10 +481,13 @@ class Epic_Wholesale_Orders_Rest_Api {
 	/** Map the internal prefixed post status to a short, stable key for the front-end. */
 	private static function short_order_status( $post_status ) {
 		switch ( $post_status ) {
+			case Epic_Wholesale_Orders_Store::STATUS_APPROVED:
+				return 'approved';
 			case Epic_Wholesale_Orders_Store::STATUS_DONE:
 				return 'done';
+			case Epic_Wholesale_Orders_Store::STATUS_UNAPPROVED:
 			case Epic_Wholesale_Orders_Store::STATUS_CANCELLED:
-				return 'cancelled';
+				return 'unapproved';
 			case Epic_Wholesale_Orders_Store::STATUS_PENDING:
 			default:
 				return 'pending';
@@ -451,6 +502,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 			'order_status'   => self::short_order_status( $order['order_status'] ),
 			'payment_status' => $order['payment_status'],
 			'level_name'     => $order['level_name'],
+			'has_invoice'    => ! empty( $order['has_invoice'] ),
 			'items'          => $order['items'],
 			'note'           => $order['note'],
 			'total'          => $order['total'],
