@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Epic_Wholesale_Settings {
+class Epic_Wholesale_Orders_Settings {
 
 	const PAGE_SLUG = 'epic-wholesale-orders';
 

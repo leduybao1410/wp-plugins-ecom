@@ -61,7 +61,7 @@ class Epic_Wholesale_Orders_Rest_Api {
 
 	/** Constant-time comparison against the secret configured in WooCommerce → Wholesale Orders. */
 	public static function check_secret( \WP_REST_Request $request ) {
-		$configured = Epic_Wholesale_Settings::get_shared_secret();
+		$configured = Epic_Wholesale_Orders_Settings::get_shared_secret();
 		if ( empty( $configured ) ) {
 			return new \WP_Error( 'epic_wholesale_orders_not_configured', 'Shared secret not configured.', array( 'status' => 500 ) );
 		}

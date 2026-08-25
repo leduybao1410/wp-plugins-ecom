@@ -92,9 +92,9 @@ add_action(
 	5
 );
 
-add_action( 'admin_menu', array( 'Epic_Wholesale_Settings', 'add_menu' ) );
-add_action( 'admin_init', array( 'Epic_Wholesale_Settings', 'register_setting' ) );
-add_action( 'admin_enqueue_scripts', array( 'Epic_Wholesale_Settings', 'enqueue_admin_assets' ) );
+add_action( 'admin_menu', array( 'Epic_Wholesale_Orders_Settings', 'add_menu' ) );
+add_action( 'admin_init', array( 'Epic_Wholesale_Orders_Settings', 'register_setting' ) );
+add_action( 'admin_enqueue_scripts', array( 'Epic_Wholesale_Orders_Settings', 'enqueue_admin_assets' ) );
 
 /**
  * The REST route must be registered unconditionally on `rest_api_init`
