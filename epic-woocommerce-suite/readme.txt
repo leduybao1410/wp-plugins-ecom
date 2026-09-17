@@ -4,15 +4,15 @@ Tags: woocommerce, coupons, shipping, ghn, newsletter, reviews, wholesale, order
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins. One activation turns on every EPIC storefront backend module instead of ten separate plugins.
+All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins. One activation turns on every EPIC storefront backend module instead of fifteen separate plugins.
 
 == Description ==
 
-EPIC WooCommerce Suite bundles ten EPIC plugins into a single plugin, so a
+EPIC WooCommerce Suite bundles sixteen EPIC plugins into a single plugin, so a
 fresh store install activates the whole EPIC storefront backend at once. Each
 module ships unchanged in `modules/` and is bootstrapped exactly as it would
 be as a standalone plugin.
@@ -30,10 +30,16 @@ Bundled modules:
   email/phone allowlist, recurring schedule, Buy X Get Y, auto-apply, bulk
   unique codes) plus a redemptions report, and the coupon-quote REST route for
   the headless checkout.
+* **EPIC Discord Order Notifications** — posts new-order notifications to a
+  Discord channel webhook.
+* **EPIC Distributor Profit** — distributor profit ledger with an
+  order-picker import, per-distributor reporting, and CSV/XLSX export.
 * **EPIC First Order Coupon** — first-time-customer-only restriction on any
   WooCommerce coupon.
 * **EPIC GHN Shipping Manager** — GHN shipment booking, cancellation, label
   printing, status tracking, and multi-order bundling for WooCommerce orders.
+* **EPIC Image Optimize** — bulk image compression/optimization tools for the
+  media library.
 * **EPIC News ↔ Product Link** — "Linked Coffee" meta box on posts, exposed via
   the REST API.
 * **EPIC Newsletter Subscription** — shared-secret-authenticated subscription
@@ -45,10 +51,14 @@ Bundled modules:
   (carrying the GHN tracking code).
 * **EPIC Payment Store** — short-lived prepaid-checkout handoff store (SePay
   bank-transfer QR) for the headless checkout.
+* **EPIC Product Cost** — per-250g product cost tracking with full history
+  (auto-scaled to 500g/1kg) and a REST API used by the companion MCP server.
 * **EPIC Product Reviews** — review submission/moderation over REST with
   aggregate rating served to the website's structured data.
 * **EPIC Wholesale Inquiries** — wholesale contact-form lead log over a
   shared-secret REST endpoint.
+* **EPIC Wholesale Orders** — wholesale price levels, customer allowlist, and
+  the wholesale order log over shared-secret REST routes.
 * **EPIC REST URL Fix** (opt-in) — rewrites rest_url() between two domains;
   only active if EPIC_REST_URL_FIX_FROM / EPIC_REST_URL_FIX_TO are defined in
   wp-config.php. See `modules/epic-rest-url-fix.php`.
@@ -58,7 +68,10 @@ in the WordPress database via the normal settings screens — never hardcoded �
 and each has a matching environment variable on the Next.js website
 (EPIC_ACCOUNT_SHARED_SECRET, EPIC_PAYMENT_SHARED_SECRET, EPIC_COUPON_SHARED_SECRET,
 EPIC_NEWSLETTER_SHARED_SECRET, EPIC_ORDER_CODES_SHARED_SECRET,
-EPIC_REVIEWS_SHARED_SECRET, EPIC_WHOLESALE_SHARED_SECRET).
+EPIC_REVIEWS_SHARED_SECRET, EPIC_WHOLESALE_SHARED_SECRET,
+EPIC_WHOLESALE_ORDERS_SHARED_SECRET). Shared-secret fields render as masked
+password inputs: the saved value is never printed into the page, and leaving
+the field blank keeps the current secret.
 
 == Installation ==
 
@@ -83,6 +96,15 @@ copy to avoid redeclaring its classes. Deactivate the standalone plugin.
 No — same modules, same class names. Use one or the other.
 
 == Changelog ==
+
+= 1.1.0 =
+* Added five modules: epic-discord-notify 1.0.0, epic-distributor-profit 1.1.0,
+  epic-image-optimize 1.0.0, epic-product-cost 1.1.0, epic-wholesale-orders
+  1.0.0.
+* Masked shared-secret fields in every module's settings screen (password
+  type, blank value, blank submit keeps the saved secret) so the value is no
+  longer exposed in the page source.
+* Activation now creates the distributor-profit and product-cost tables.
 
 = 1.0.0 =
 * Initial release. Bundles epic-account-linking 1.0.0, epic-advanced-coupons

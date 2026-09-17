@@ -375,6 +375,19 @@ class Epic_GHN_Ajax {
 		$subtotal = (float) $order->get_subtotal();
 		$total    = (float) $order->get_total();
 
+		// COD orders are booked with payment_type_id = PAYMENT_TYPE_COD, i.e.
+		// "recipient pays the shipper" -- GHN has the courier collect its own
+		// calculated shipping fee from the recipient IN ADDITION to whatever
+		// cod_amount is sent, it does not net the fee out of cod_amount. Since
+		// $total already has WooCommerce's own shipping_total (+ shipping tax)
+		// baked in from checkout, sending cod_amount = $total would make the
+		// courier collect the shipping fee twice: once inside cod_amount, once
+		// again as GHN's own added fee. cod_amount must only be the goods
+		// portion; the shipping fee reaches the shop by being netted out of
+		// GHN's remittance instead of collected twice at the door.
+		$shipping_amount = (float) $order->get_shipping_total() + (float) $order->get_shipping_tax();
+		$cod_amount       = max( 0, $total - $shipping_amount );
+
 		$fee = Epic_GHN_Client::calculate_fee(
 			array(
 				'to_district_id'  => $district_id,
@@ -403,7 +416,7 @@ class Epic_GHN_Ajax {
 				'to_district_id'    => $district_id,
 				'to_ward_code'      => $ward_code,
 				'payment_type_id'   => $is_cod ? Epic_GHN_Client::PAYMENT_TYPE_COD : Epic_GHN_Client::PAYMENT_TYPE_PREPAID,
-				'cod_amount'        => $is_cod ? $total : 0,
+				'cod_amount'        => $is_cod ? $cod_amount : 0,
 				'insurance_value'   => $subtotal,
 				'weight_g'          => $weight_g,
 				'items'             => $items,
@@ -427,15 +440,16 @@ class Epic_GHN_Ajax {
 		$order->update_meta_data( '_ghn_expected_delivery', isset( $shipment['expected_delivery_time'] ) ? $shipment['expected_delivery_time'] : '' );
 		$order->update_meta_data( '_ghn_shipment_status', 'ready_to_pick' );
 		$order->update_meta_data( '_ghn_last_synced_at', current_time( 'mysql' ) );
-		$order->update_meta_data( '_ghn_cod_amount', $is_cod ? $total : 0 );
+		$order->update_meta_data( '_ghn_cod_amount', $is_cod ? $cod_amount : 0 );
 		$order->save();
 
 		$order->add_order_note(
 			$is_cod
 				? sprintf(
-					/* translators: 1: GHN tracking code, 2: COD amount to collect */
-					__( 'GHN shipment booked from wp-admin as COD. Tracking code: %1$s. Amount to collect on delivery: %2$s.', 'epic-ghn-shipping' ),
+					/* translators: 1: GHN tracking code, 2: COD amount to collect for goods, 3: order total the customer was quoted */
+					__( 'GHN shipment booked from wp-admin as COD. Tracking code: %1$s. Amount to collect on delivery: %2$s (goods) -- GHN separately collects its own shipping fee from the recipient since payment_type_id is COD; combined with the shipping fee, that comes out to the order total of %3$s.', 'epic-ghn-shipping' ),
 					$shipment['order_code'],
+					wp_strip_all_tags( wc_price( $cod_amount ) ),
 					wp_strip_all_tags( wc_price( $total ) )
 				)
 				: sprintf(

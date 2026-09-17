@@ -42,7 +42,7 @@ class Epic_Adv_Coupons_Quote_Settings {
 			self::OPTION_KEY,
 			array(
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_shared_secret' ),
 				'default'           => '',
 			)
 		);
@@ -50,6 +50,17 @@ class Epic_Adv_Coupons_Quote_Settings {
 
 	public static function get_shared_secret() {
 		return get_option( self::OPTION_KEY, '' );
+	}
+
+	/**
+	 * Keeps the stored secret when the masked field is submitted empty. The
+	 * field renders blank on purpose (see render_page) so the value never
+	 * appears in the page source; an empty POST therefore means "leave the
+	 * saved secret alone", not "clear it".
+	 */
+	public static function sanitize_shared_secret( $value ) {
+		$value = sanitize_text_field( $value );
+		return '' === $value ? self::get_shared_secret() : $value;
 	}
 
 	public static function render_page() {
@@ -70,16 +81,22 @@ class Epic_Adv_Coupons_Quote_Settings {
 							<label for="epic_coupon_shared_secret"><?php esc_html_e( 'Shared secret', 'epic-advanced-coupons' ); ?></label>
 						</th>
 						<td>
+							<?php $epic_secret_is_set = '' !== self::get_shared_secret(); ?>
 							<input
-								type="text"
+								type="password"
 								id="epic_coupon_shared_secret"
 								name="<?php echo esc_attr( self::OPTION_KEY ); ?>"
-								value="<?php echo esc_attr( self::get_shared_secret() ); ?>"
+								value=""
+								placeholder="<?php echo esc_attr( $epic_secret_is_set ? '••••••••••' : '' ); ?>"
 								class="regular-text code"
-								autocomplete="off"
+								autocomplete="new-password"
 							/>
 							<p class="description">
 								<?php esc_html_e( 'A long random string, separate from the Payment Store secret. Generate one and paste it here, then copy the same value into the website\'s environment variables.', 'epic-advanced-coupons' ); ?>
+								<?php if ( $epic_secret_is_set ) : ?>
+									<br />
+									<?php esc_html_e( 'A secret is saved. Leave this field blank to keep it, or paste a new value to replace it.', 'epic-advanced-coupons' ); ?>
+								<?php endif; ?>
 							</p>
 						</td>
 					</tr>

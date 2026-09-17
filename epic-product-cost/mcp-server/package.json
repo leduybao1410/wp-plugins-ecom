@@ -1,0 +1,17 @@
+{
+  "name": "epic-product-cost-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing the EPIC Product Cost WordPress plugin's REST API as tools.",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "epic-product-cost-mcp": "server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.0.0"
+  }
+}

@@ -248,9 +248,17 @@ class Epic_GHN_Order_Meta_Box {
 			<?php echo esc_html( $order->get_payment_method_title() ); ?> —
 			<?php
 			if ( $is_cod ) {
+				// Mirrors Epic_GHN_Ajax::book_single_order()'s $cod_amount: the
+				// goods-only portion, since GHN separately collects its own
+				// calculated shipping fee from the recipient on top of cod_amount
+				// -- sending the full order total (which already includes
+				// WooCommerce's own shipping_total) as cod_amount would double
+				// the shipping charge.
+				$cod_amount_preview = max( 0, (float) $order->get_total() - (float) $order->get_shipping_total() - (float) $order->get_shipping_tax() );
 				printf(
-					/* translators: %s: formatted order total to collect on delivery */
-					esc_html__( 'will book as COD, collecting %s on delivery.', 'epic-ghn-shipping' ),
+					/* translators: 1: formatted goods amount to collect on delivery, 2: formatted order total */
+					esc_html__( 'will book as COD, collecting %1$s on delivery for the goods (GHN separately collects its own shipping fee from the recipient) -- together that comes out to the order total of %2$s.', 'epic-ghn-shipping' ),
+					wp_kses_post( wp_strip_all_tags( wc_price( $cod_amount_preview ) ) ),
 					wp_kses_post( wp_strip_all_tags( wc_price( $order->get_total() ) ) )
 				);
 			} else {

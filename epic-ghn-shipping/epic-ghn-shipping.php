@@ -3,7 +3,7 @@
  * Plugin Name:       EPIC GHN Shipping Manager
  * Plugin URI:        https://epicroastery.example/
  * Description:       GHN (Giao Hàng Nhanh) shipment booking, cancellation, label printing, and status tracking for WooCommerce orders, including bundling multiple orders into a single GHN shipment from the Orders list.
- * Version:           0.10.0
+ * Version:           0.10.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_GHN_VERSION', '0.10.0' );
+define( 'EPIC_GHN_VERSION', '0.10.1' );
 define( 'EPIC_GHN_PLUGIN_FILE', __FILE__ );
 define( 'EPIC_GHN_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_GHN_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

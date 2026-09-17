@@ -6,7 +6,7 @@ Tested up to: 6.6
 Requires PHP: 7.4
 WC requires at least: 7.0
 WC tested up to: 8.9
-Stable tag: 0.10.0
+Stable tag: 0.10.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -48,6 +48,9 @@ Shipment booking is always staff-initiated — nothing books automatically. The 
 5. To bundle multiple *prepaid* orders into one physical parcel: select 2+ unshipped orders on the Orders list, choose **Bundle & ship via GHN** from Bulk actions, review, and confirm.
 
 == Changelog ==
+
+= 0.10.1 =
+* Fix: COD shipments were booking with `cod_amount` = the full WooCommerce order total, which already includes the order's own shipping_total. Since COD shipments are booked with payment_type_id = COD ("recipient pays the shipper"), GHN has the courier collect its own calculated shipping fee from the recipient on top of whatever cod_amount is sent, rather than netting it out of cod_amount -- so the customer was being charged the shipping fee twice on delivery (once baked into cod_amount, once again as GHN's own added fee). `cod_amount` now excludes the order's shipping_total and shipping_tax, sending only the goods portion; GHN's separately-collected shipping fee makes up the difference back to the order total the customer was quoted at checkout. Affects `Epic_GHN_Ajax::book_single_order()` (the single-order booking path used by the meta box button, the Orders-list row action, and the bulk action) and the meta box's pre-booking COD preview text. Bundled (prepaid-only) shipments were unaffected -- they already always send cod_amount = 0.
 
 = 0.10.0 =
 * New: **Free shipping minimum order amount** field added to WooCommerce → Settings → GHN Shipping (under a new "Free shipping promotion" section). This does not enable free shipping by itself — the storefront's own checkout code (`lib/cart.ts` / `lib/woocommerce.ts` on the website side) is what actually waives the shipping fee, by reading this value through WooCommerce's Settings REST API at order time, cached for ~2 minutes, falling back to ₫500,000 if the setting can't be read for any reason. Changing the number here (e.g. 500000 → 300000) takes effect on the next order after the cache expires — no site deploy needed. This field is deliberately not a WooCommerce coupon or shipping method, since this store's checkout is headless and never loads WooCommerce's cart/coupon engine (see 0.9.0 and earlier — orders are created directly via the REST API).

@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       EPIC WooCommerce Suite
  * Plugin URI:        https://github.com/leduybao1410/wp-plugins-ecom
- * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: account linking (Google sign-in order history), advanced coupon rules, first-order coupon restriction, GHN shipping manager, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product reviews, and wholesale inquiries. One plugin to activate instead of ten.
- * Version:           1.0.0
+ * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: account linking (Google sign-in order history), advanced coupon rules, Discord order notifications, distributor profit tracking, first-order coupon restriction, GHN shipping manager, image optimization, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product cost, product reviews, wholesale inquiries, and wholesale orders. One plugin to activate instead of fifteen.
+ * Version:           1.1.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_SUITE_VERSION', '1.0.0' );
+define( 'EPIC_SUITE_VERSION', '1.1.0' );
 define( 'EPIC_SUITE_FILE', __FILE__ );
 define( 'EPIC_SUITE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_SUITE_MODULES_DIR', EPIC_SUITE_DIR . 'modules/' );
@@ -48,6 +48,18 @@ function epic_suite_modules() {
 			'sentinel'   => 'EPIC_ADV_COUPONS_VERSION',
 			'label'      => 'EPIC Advanced Coupons',
 		),
+		'epic-discord-notify'          => array(
+			'main'       => 'epic-discord-notify/epic-discord-notify.php',
+			'standalone' => 'epic-discord-notify/epic-discord-notify.php',
+			'sentinel'   => 'EPIC_DISCORD_NOTIFY_VERSION',
+			'label'      => 'EPIC Discord Order Notifications',
+		),
+		'epic-distributor-profit'      => array(
+			'main'       => 'epic-distributor-profit/epic-distributor-profit.php',
+			'standalone' => 'epic-distributor-profit/epic-distributor-profit.php',
+			'sentinel'   => 'EPIC_DISTRIBUTOR_PROFIT_VERSION',
+			'label'      => 'EPIC Distributor Profit',
+		),
 		'epic-first-order-coupon'      => array(
 			'main'       => 'epic-first-order-coupon/epic-first-order-coupon.php',
 			'standalone' => 'epic-first-order-coupon/epic-first-order-coupon.php',
@@ -59,6 +71,12 @@ function epic_suite_modules() {
 			'standalone' => 'epic-ghn-shipping/epic-ghn-shipping.php',
 			'sentinel'   => 'EPIC_GHN_VERSION',
 			'label'      => 'EPIC GHN Shipping Manager',
+		),
+		'epic-image-optimize'          => array(
+			'main'       => 'epic-image-optimize/epic-image-optimize.php',
+			'standalone' => 'epic-image-optimize/epic-image-optimize.php',
+			'sentinel'   => 'EPIC_IMAGE_OPTIMIZE_VERSION',
+			'label'      => 'EPIC Image Optimize',
 		),
 		'epic-news-product-link'       => array(
 			'main'       => 'epic-news-product-link/epic-news-product-link.php',
@@ -90,6 +108,12 @@ function epic_suite_modules() {
 			'sentinel'   => 'EPIC_PAYMENT_STORE_VERSION',
 			'label'      => 'EPIC Payment Store',
 		),
+		'epic-product-cost'            => array(
+			'main'       => 'epic-product-cost/epic-product-cost.php',
+			'standalone' => 'epic-product-cost/epic-product-cost.php',
+			'sentinel'   => 'EPIC_PRODUCT_COST_VERSION',
+			'label'      => 'EPIC Product Cost',
+		),
 		'epic-product-reviews'         => array(
 			'main'       => 'epic-product-reviews/epic-product-reviews.php',
 			'standalone' => 'epic-product-reviews/epic-product-reviews.php',
@@ -101,6 +125,12 @@ function epic_suite_modules() {
 			'standalone' => 'epic-wholesale-inquiries/epic-wholesale-inquiries.php',
 			'sentinel'   => 'EPIC_WHOLESALE_INQUIRIES_VERSION',
 			'label'      => 'EPIC Wholesale Inquiries',
+		),
+		'epic-wholesale-orders'        => array(
+			'main'       => 'epic-wholesale-orders/epic-wholesale-orders.php',
+			'standalone' => 'epic-wholesale-orders/epic-wholesale-orders.php',
+			'sentinel'   => 'EPIC_WHOLESALE_ORDERS_VERSION',
+			'label'      => 'EPIC Wholesale Orders',
 		),
 	);
 }
@@ -205,6 +235,26 @@ function epic_suite_activate() {
 	}
 	if ( ! wp_next_scheduled( 'epic_payment_purge_expired' ) ) {
 		wp_schedule_event( time(), 'daily', 'epic_payment_purge_expired' );
+	}
+
+	// These two modules only load their store class on plugins_loaded, which
+	// has already fired by the time this activation request runs — so require
+	// the class directly before calling install(). Guarded by class_exists():
+	// if the standalone copy is still active it has already declared the same
+	// class from a different file path, and an unguarded require would redeclare
+	// it and fatal.
+	if ( ! class_exists( 'Epic_Distributor_Profit_Store' ) ) {
+		require_once EPIC_SUITE_MODULES_DIR . 'epic-distributor-profit/includes/class-store.php';
+	}
+	if ( class_exists( 'Epic_Distributor_Profit_Store' ) ) {
+		Epic_Distributor_Profit_Store::install();
+	}
+
+	if ( ! class_exists( 'Epic_Product_Cost_Store' ) ) {
+		require_once EPIC_SUITE_MODULES_DIR . 'epic-product-cost/includes/class-store.php';
+	}
+	if ( class_exists( 'Epic_Product_Cost_Store' ) ) {
+		Epic_Product_Cost_Store::install();
 	}
 
 	if ( class_exists( 'Epic_Reviews_Store' ) ) {
