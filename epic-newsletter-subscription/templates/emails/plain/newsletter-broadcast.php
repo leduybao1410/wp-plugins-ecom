@@ -30,3 +30,5 @@ echo esc_html(
 		? "You're receiving this because you subscribed to the EPIC Roastery newsletter. To unsubscribe, just reply to this email and we'll take care of it."
 		: 'Bạn nhận được email này vì đã đăng ký nhận tin từ EPIC Roastery. Để hủy đăng ký, chỉ cần trả lời email này và chúng tôi sẽ xử lý ngay.'
 ) . "\n";
+
+echo "\n" . apply_filters( 'woocommerce_email_footer_text', get_option( 'woocommerce_email_footer_text' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- same core filter every plain-text WC email template calls unescaped.

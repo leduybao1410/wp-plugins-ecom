@@ -4,7 +4,7 @@ Tags: woocommerce, coupons, shipping, ghn, newsletter, reviews, wholesale, order
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins. One activatio
 
 == Description ==
 
-EPIC WooCommerce Suite bundles sixteen EPIC plugins into a single plugin, so a
+EPIC WooCommerce Suite bundles eighteen EPIC plugins into a single plugin, so a
 fresh store install activates the whole EPIC storefront backend at once. Each
 module ships unchanged in `modules/` and is bootstrapped exactly as it would
 be as a standalone plugin.
@@ -34,6 +34,9 @@ Bundled modules:
   Discord channel webhook.
 * **EPIC Distributor Profit** — distributor profit ledger with an
   order-picker import, per-distributor reporting, and CSV/XLSX export.
+* **EPIC Email Branding** — branded header bar and a contact-info footer
+  (café/roastery address, hotline, email, website, Instagram, hours) on every
+  WooCommerce email, global via hooks; all values filterable.
 * **EPIC First Order Coupon** — first-time-customer-only restriction on any
   WooCommerce coupon.
 * **EPIC GHN Shipping Manager** — GHN shipment booking, cancellation, label
@@ -55,6 +58,9 @@ Bundled modules:
   (auto-scaled to 500g/1kg) and a REST API used by the companion MCP server.
 * **EPIC Product Reviews** — review submission/moderation over REST with
   aggregate rating served to the website's structured data.
+* **EPIC Sample Requests** — free-coffee-sample request log (name, phone,
+  structured Vietnam address, favourite taste) over a shared-secret REST
+  endpoint, with an admin notification email.
 * **EPIC Wholesale Inquiries** — wholesale contact-form lead log over a
   shared-secret REST endpoint.
 * **EPIC Wholesale Orders** — wholesale price levels, customer allowlist, and
@@ -68,7 +74,8 @@ in the WordPress database via the normal settings screens — never hardcoded �
 and each has a matching environment variable on the Next.js website
 (EPIC_ACCOUNT_SHARED_SECRET, EPIC_PAYMENT_SHARED_SECRET, EPIC_COUPON_SHARED_SECRET,
 EPIC_NEWSLETTER_SHARED_SECRET, EPIC_ORDER_CODES_SHARED_SECRET,
-EPIC_REVIEWS_SHARED_SECRET, EPIC_WHOLESALE_SHARED_SECRET,
+EPIC_REVIEWS_SHARED_SECRET, EPIC_SAMPLE_SHARED_SECRET,
+EPIC_WHOLESALE_SHARED_SECRET,
 EPIC_WHOLESALE_ORDERS_SHARED_SECRET). Shared-secret fields render as masked
 password inputs: the saved value is never printed into the page, and leaving
 the field blank keeps the current secret.
@@ -96,6 +103,31 @@ copy to avoid redeclaring its classes. Deactivate the standalone plugin.
 No — same modules, same class names. Use one or the other.
 
 == Changelog ==
+
+= 1.3.0 =
+* Added epic-email-branding 1.0.0: a global branded header bar plus a
+  contact-info footer (address, hotline, email, website, Instagram, hours) on
+  every WooCommerce email, via the `woocommerce_email_header` action and
+  `woocommerce_email_footer_text` filter. Also added the footer to the three
+  plain-text templates that were missing it (newsletter broadcast, wholesale
+  order admin/customer).
+
+= 1.2.2 =
+* epic-sample-requests 1.2.0: added an optional brew style, made email/taste/
+  brew optional (only name, address and phone required), added phone
+  validation (10 digits starting with 0). Schema 1.2 adds `brew` columns.
+
+= 1.2.1 =
+* epic-sample-requests 1.1.0: the free-sample form now collects an email
+  address and sends the requester a bilingual thank-you confirmation
+  (`Epic_Email_Sample_Confirmation`), with a second status column in the
+  WooCommerce → Sample Requests log. Schema 1.1 adds `email` and
+  `confirm_status` columns.
+
+= 1.2.0 =
+* Added epic-sample-requests 1.0.0: free-coffee-sample request log over a
+  shared-secret REST endpoint, with an admin notification email and the
+  WooCommerce → Sample Requests admin screen. Activation now creates its table.
 
 = 1.1.0 =
 * Added five modules: epic-discord-notify 1.0.0, epic-distributor-profit 1.1.0,
