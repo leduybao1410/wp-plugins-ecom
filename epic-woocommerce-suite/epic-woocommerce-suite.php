@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       EPIC WooCommerce Suite
  * Plugin URI:        https://github.com/leduybao1410/wp-plugins-ecom
- * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: account linking (Google sign-in order history), advanced coupon rules, Discord order notifications, distributor profit tracking, first-order coupon restriction, GHN shipping manager, image optimization, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product cost, product reviews, wholesale inquiries, and wholesale orders. One plugin to activate instead of fifteen.
- * Version:           1.1.0
+ * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: account linking (Google sign-in order history), advanced coupon rules, Discord order notifications, distributor profit tracking, branded email headers/footers (address, hotline, hours), first-order coupon restriction, GHN shipping manager, image optimization, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product cost, product reviews, free-sample requests, wholesale inquiries, and wholesale orders. One plugin to activate instead of fifteen.
+ * Version:           1.3.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_SUITE_VERSION', '1.1.0' );
+define( 'EPIC_SUITE_VERSION', '1.3.0' );
 define( 'EPIC_SUITE_FILE', __FILE__ );
 define( 'EPIC_SUITE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_SUITE_MODULES_DIR', EPIC_SUITE_DIR . 'modules/' );
@@ -36,6 +36,12 @@ define( 'EPIC_SUITE_MODULES_DIR', EPIC_SUITE_DIR . 'modules/' );
  */
 function epic_suite_modules() {
 	return array(
+		'epic-agent-api'               => array(
+			'main'       => 'epic-agent-api/epic-agent-api.php',
+			'standalone' => 'epic-agent-api/epic-agent-api.php',
+			'sentinel'   => 'EPIC_AGENT_API_VERSION',
+			'label'      => 'EPIC Agent API',
+		),
 		'epic-account-linking'         => array(
 			'main'       => 'epic-account-linking/epic-account-linking.php',
 			'standalone' => 'epic-account-linking/epic-account-linking.php',
@@ -59,6 +65,12 @@ function epic_suite_modules() {
 			'standalone' => 'epic-distributor-profit/epic-distributor-profit.php',
 			'sentinel'   => 'EPIC_DISTRIBUTOR_PROFIT_VERSION',
 			'label'      => 'EPIC Distributor Profit',
+		),
+		'epic-email-branding'          => array(
+			'main'       => 'epic-email-branding/epic-email-branding.php',
+			'standalone' => 'epic-email-branding/epic-email-branding.php',
+			'sentinel'   => 'EPIC_EMAIL_BRANDING_VERSION',
+			'label'      => 'EPIC Email Branding',
 		),
 		'epic-first-order-coupon'      => array(
 			'main'       => 'epic-first-order-coupon/epic-first-order-coupon.php',
@@ -119,6 +131,12 @@ function epic_suite_modules() {
 			'standalone' => 'epic-product-reviews/epic-product-reviews.php',
 			'sentinel'   => 'EPIC_PRODUCT_REVIEWS_VERSION',
 			'label'      => 'EPIC Product Reviews',
+		),
+		'epic-sample-requests'         => array(
+			'main'       => 'epic-sample-requests/epic-sample-requests.php',
+			'standalone' => 'epic-sample-requests/epic-sample-requests.php',
+			'sentinel'   => 'EPIC_SAMPLE_REQUESTS_VERSION',
+			'label'      => 'EPIC Sample Requests',
 		),
 		'epic-wholesale-inquiries'     => array(
 			'main'       => 'epic-wholesale-inquiries/epic-wholesale-inquiries.php',
@@ -208,6 +226,13 @@ add_action(
  * dbDelta only), so this works during the activation request itself.
  */
 function epic_suite_activate() {
+	if ( class_exists( 'Epic_Agent_Store' ) ) {
+		Epic_Agent_Store::install();
+	}
+	if ( ! wp_next_scheduled( 'epic_agent_purge_events' ) ) {
+		wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'epic_agent_purge_events' );
+	}
+
 	if ( class_exists( 'Epic_Account_Store' ) ) {
 		Epic_Account_Store::install();
 	}
@@ -261,6 +286,10 @@ function epic_suite_activate() {
 		Epic_Reviews_Store::install();
 	}
 
+	if ( class_exists( 'Epic_Sample_Store' ) ) {
+		Epic_Sample_Store::install();
+	}
+
 	if ( class_exists( 'Epic_Wholesale_Store' ) ) {
 		Epic_Wholesale_Store::install();
 	}
@@ -273,6 +302,7 @@ register_activation_hook( __FILE__, 'epic_suite_activate' );
  */
 function epic_suite_deactivate() {
 	wp_clear_scheduled_hook( 'epic_payment_purge_expired' );
+	wp_clear_scheduled_hook( 'epic_agent_purge_events' );
 }
 register_deactivation_hook( __FILE__, 'epic_suite_deactivate' );
 
