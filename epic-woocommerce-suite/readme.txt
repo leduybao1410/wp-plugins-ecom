@@ -4,7 +4,7 @@ Tags: woocommerce, coupons, shipping, ghn, newsletter, reviews, wholesale, order
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -103,6 +103,14 @@ copy to avoid redeclaring its classes. Deactivate the standalone plugin.
 No — same modules, same class names. Use one or the other.
 
 == Changelog ==
+
+= 1.4.1 =
+* Localized the WooCommerce email header/footer (epic-email-branding) and the
+  customer email headings + subjects. The brand bar tagline/labels/hours and
+  the contact footer now follow the same storefront locale as the email body,
+  and each customer email's heading/subject is set per send from the order's
+  `_epic_locale` meta (or the newsletter/sample locale), falling back to
+  Vietnamese. Adds a shared `epic_email_locale()` normalizer to the i18n helper.
 
 = 1.4.0 =
 * Localized customer emails: new `includes/epic-email-i18n.php` provides

@@ -24,6 +24,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( file_exists( __DIR__ . '/epic-email-i18n.php' ) ) {
+	require_once __DIR__ . '/epic-email-i18n.php';
+}
+
 class Epic_Email_Order_Shipped extends WC_Email {
 
 	/** @var string GHN tracking code for the current send — set by trigger(), read by the templates. */
@@ -98,6 +102,12 @@ class Epic_Email_Order_Shipped extends WC_Email {
 		$this->recipient                       = $order->get_billing_email();
 		$this->placeholders['{order_number}']  = $order->get_order_number();
 		$this->placeholders['{tracking_code}'] = $tracking_code;
+
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			$epic_locale   = epic_email_locale( $order->get_meta( '_epic_locale' ) );
+			$this->heading = epic_email_str( 'heading_order_shipped', $epic_locale );
+			$this->subject = epic_email_str( 'subject_order_shipped', $epic_locale );
+		}
 
 		// Best-effort — only used to show a COD-due amount in the email.
 		// Guarded rather than a hard dependency (see class docblock): this

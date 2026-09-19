@@ -26,6 +26,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( file_exists( __DIR__ . '/epic-email-i18n.php' ) ) {
+	require_once __DIR__ . '/epic-email-i18n.php';
+}
+
 class Epic_Email_Order_Created extends WC_Email {
 
 	public function __construct() {
@@ -78,6 +82,12 @@ class Epic_Email_Order_Created extends WC_Email {
 			$this->recipient                       = $order->get_billing_email();
 			$this->placeholders['{order_number}'] = $order->get_order_number();
 			$this->placeholders['{order_date}']   = wc_format_datetime( $order->get_date_created() );
+		}
+
+		if ( $this->object instanceof WC_Order && function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			$epic_locale   = epic_email_locale( $this->object->get_meta( '_epic_locale' ) );
+			$this->heading = epic_email_str( 'heading_order_created', $epic_locale );
+			$this->subject = epic_email_str( 'subject_order_created', $epic_locale );
 		}
 
 		if ( ! $this->object instanceof WC_Order ) {

@@ -3,7 +3,7 @@
  * Plugin Name:       EPIC WooCommerce Suite
  * Plugin URI:        https://github.com/leduybao1410/wp-plugins-ecom
  * Description:       All-in-one bundle of the EPIC Coffee Roastery WooCommerce plugins: account linking (Google sign-in order history), advanced coupon rules, Discord order notifications, distributor profit tracking, branded email headers/footers (address, hotline, hours), first-order coupon restriction, GHN shipping manager, image optimization, news↔product links, newsletter subscriptions, unguessable order codes, order emails, payment store, product cost, product reviews, free-sample requests, wholesale inquiries, and wholesale orders. One plugin to activate instead of fifteen.
- * Version:           1.4.0
+ * Version:           1.4.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_SUITE_VERSION', '1.4.0' );
+define( 'EPIC_SUITE_VERSION', '1.4.1' );
 define( 'EPIC_SUITE_FILE', __FILE__ );
 define( 'EPIC_SUITE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_SUITE_MODULES_DIR', EPIC_SUITE_DIR . 'modules/' );

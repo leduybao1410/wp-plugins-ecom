@@ -212,6 +212,130 @@ if ( ! function_exists( 'epic_email_str' ) ) {
 				),
 				'os_eta' => array( 'en' => 'Estimated delivery:', 'vi' => 'Dự kiến giao hàng:', 'ru' => 'Ожидаемая доставка:', 'hi' => 'अनुमानित डिलीवरी:', 'zh' => '预计送达：', 'ko' => '예상 배송:', 'ja' => 'お届け予定：' ),
 				'os_cod' => array( 'en' => 'Cash on delivery (COD) amount:', 'vi' => 'Số tiền thanh toán khi nhận hàng (COD):', 'ru' => 'Сумма оплаты при получении (COD):', 'hi' => 'डिलीवरी पर नकद (COD) राशि:', 'zh' => '货到付款（COD）金额：', 'ko' => '착불(COD) 금액:', 'ja' => '代金引換（COD）金額：' ),
+				// --- Branding header/footer --------------------------------
+				'brand_tagline' => array(
+					'en' => 'Doing better each day · Specialty coffee roasted in Sài Gòn since 2014',
+					'vi' => 'Mỗi ngày tốt hơn · Cà phê đặc sản rang tại Sài Gòn từ 2014',
+					'ru' => 'С каждым днём лучше · Спешелти-кофе, обжаренный в Сайгоне с 2014 года',
+					'hi' => 'हर दिन बेहतर · 2014 से साइगॉन में भुनी स्पेशल्टी कॉफ़ी',
+					'zh' => '日复一日，做得更好 · 自 2014 年西贡烘焙的精品咖啡',
+					'ko' => '매일 더 나아지게 · 2014년부터 사이공에서 로스팅한 스페셜티 커피',
+					'ja' => '毎日、より良く · 2014年からサイゴンで焙煎するスペシャルティコーヒー',
+				),
+				'label_cafe' => array( 'en' => 'Café', 'vi' => 'Quán', 'ru' => 'Кафе', 'hi' => 'कैफ़े', 'zh' => '咖啡馆', 'ko' => '카페', 'ja' => 'カフェ' ),
+				'label_roastery' => array( 'en' => 'Roastery', 'vi' => 'Xưởng rang', 'ru' => 'Обжарочный цех', 'hi' => 'रोस्ट्री', 'zh' => '烘焙坊', 'ko' => '로스터리', 'ja' => 'ロースタリー' ),
+				'label_hotline' => array( 'en' => 'Hotline', 'vi' => 'Hotline', 'ru' => 'Горячая линия', 'hi' => 'हॉटलाइन', 'zh' => '热线', 'ko' => '핫라인', 'ja' => 'ホットライン' ),
+				'label_email' => array( 'en' => 'Email', 'vi' => 'Email', 'ru' => 'Email', 'hi' => 'ईमेल', 'zh' => '邮箱', 'ko' => '이메일', 'ja' => 'メール' ),
+				'brand_hours' => array(
+					'en' => 'Open daily 7:00–22:30',
+					'vi' => 'Mở cửa hằng ngày 7:00–22:30',
+					'ru' => 'Ежедневно 7:00–22:30',
+					'hi' => 'रोज़ 7:00–22:30 खुला',
+					'zh' => '每天 7:00–22:30 营业',
+					'ko' => '매일 7:00–22:30 영업',
+					'ja' => '毎日 7:00–22:30 営業',
+				),
+				'brand_rights' => array(
+					'en' => 'All rights reserved.',
+					'vi' => 'Bảo lưu mọi quyền.',
+					'ru' => 'Все права защищены.',
+					'hi' => 'सर्वाधिकार सुरक्षित।',
+					'zh' => '版权所有。',
+					'ko' => '모든 권리 보유.',
+					'ja' => '無断転載を禁じます。',
+				),
+				// --- Headings ----------------------------------------------
+				'heading_newsletter' => array(
+					'en' => 'Thanks for subscribing to the EPIC Roastery newsletter!',
+					'vi' => 'Cảm ơn bạn đã đăng ký nhận tin từ EPIC Roastery!',
+					'ru' => 'Спасибо за подписку на рассылку EPIC Roastery!',
+					'hi' => 'EPIC Roastery न्यूज़लेटर की सदस्यता के लिए धन्यवाद!',
+					'zh' => '感谢您订阅 EPIC Roastery 电子报！',
+					'ko' => 'EPIC Roastery 뉴스레터를 구독해 주셔서 감사합니다!',
+					'ja' => 'EPIC Roastery のニュースレターをご購読いただきありがとうございます！',
+				),
+				'heading_sample' => array(
+					'en' => 'Thank you for requesting a free coffee sample!',
+					'vi' => 'Cảm ơn bạn đã đăng ký nhận mẫu cà phê miễn phí!',
+					'ru' => 'Спасибо за заявку на бесплатный образец кофе!',
+					'hi' => 'मुफ़्त कॉफ़ी सैंपल का अनुरोध करने के लिए धन्यवाद!',
+					'zh' => '感谢您申请免费咖啡样品！',
+					'ko' => '무료 커피 샘플을 신청해 주셔서 감사합니다!',
+					'ja' => '無料コーヒーサンプルをお申し込みいただきありがとうございます！',
+				),
+				'heading_wholesale' => array(
+					'en' => "We've received your wholesale order",
+					'vi' => 'Đã nhận đơn hàng sỉ của bạn',
+					'ru' => 'Мы получили ваш оптовый заказ',
+					'hi' => 'हमें आपका थोक ऑर्डर प्राप्त हो गया है',
+					'zh' => '我们已收到您的批发订单',
+					'ko' => '도매 주문을 접수했습니다',
+					'ja' => '卸売りご注文を承りました',
+				),
+				'heading_order_created' => array(
+					'en' => 'Thank you for your order at EPIC Roastery!',
+					'vi' => 'Cảm ơn bạn đã đặt hàng tại EPIC Roastery!',
+					'ru' => 'Спасибо за заказ в EPIC Roastery!',
+					'hi' => 'EPIC Roastery से ऑर्डर करने के लिए धन्यवाद!',
+					'zh' => '感谢您在 EPIC Roastery 下单！',
+					'ko' => 'EPIC Roastery에서 주문해 주셔서 감사합니다!',
+					'ja' => 'EPIC Roastery をご利用いただきありがとうございます！',
+				),
+				'heading_order_shipped' => array(
+					'en' => 'Your order is on its way',
+					'vi' => 'Đơn hàng của bạn đang trên đường tới',
+					'ru' => 'Ваш заказ в пути',
+					'hi' => 'आपका ऑर्डर रास्ते में है',
+					'zh' => '您的订单已在路上',
+					'ko' => '주문이 배송 중입니다',
+					'ja' => 'ご注文を発送しました',
+				),
+				// --- Subjects (placeholders preserved) ----------------------
+				'subject_newsletter' => array(
+					'en' => '[{site_title}] Thanks for subscribing',
+					'vi' => '[{site_title}] Cảm ơn bạn đã đăng ký nhận tin',
+					'ru' => '[{site_title}] Спасибо за подписку',
+					'hi' => '[{site_title}] सदस्यता के लिए धन्यवाद',
+					'zh' => '[{site_title}] 感谢订阅',
+					'ko' => '[{site_title}] 구독해 주셔서 감사합니다',
+					'ja' => '[{site_title}] ご購読ありがとうございます',
+				),
+				'subject_sample' => array(
+					'en' => '[{site_title}] Thank you for your free-sample request',
+					'vi' => '[{site_title}] Cảm ơn bạn đã đăng ký nhận mẫu cà phê miễn phí',
+					'ru' => '[{site_title}] Спасибо за заявку на бесплатный образец',
+					'hi' => '[{site_title}] मुफ़्त सैंपल अनुरोध के लिए धन्यवाद',
+					'zh' => '[{site_title}] 感谢申请免费样品',
+					'ko' => '[{site_title}] 무료 샘플 신청 감사합니다',
+					'ja' => '[{site_title}] 無料サンプルをお申し込みいただきありがとうございます',
+				),
+				'subject_wholesale' => array(
+					'en' => '[{site_title}] Wholesale order confirmed {order_number}',
+					'vi' => '[{site_title}] Xác nhận đơn hàng sỉ {order_number}',
+					'ru' => '[{site_title}] Оптовый заказ подтверждён {order_number}',
+					'hi' => '[{site_title}] थोक ऑर्डर की पुष्टि {order_number}',
+					'zh' => '[{site_title}] 批发订单已确认 {order_number}',
+					'ko' => '[{site_title}] 도매 주문 확인 {order_number}',
+					'ja' => '[{site_title}] 卸売りご注文の確認 {order_number}',
+				),
+				'subject_order_created' => array(
+					'en' => '[{site_title}] Order #{order_number} confirmed',
+					'vi' => '[{site_title}] Xác nhận đơn hàng #{order_number}',
+					'ru' => '[{site_title}] Заказ №{order_number} подтверждён',
+					'hi' => '[{site_title}] ऑर्डर #{order_number} की पुष्टि',
+					'zh' => '[{site_title}] 订单 #{order_number} 已确认',
+					'ko' => '[{site_title}] 주문 #{order_number} 확인',
+					'ja' => '[{site_title}] ご注文 #{order_number} を承りました',
+				),
+				'subject_order_shipped' => array(
+					'en' => '[{site_title}] Order #{order_number} has shipped',
+					'vi' => '[{site_title}] Đơn hàng #{order_number} đã giao cho vận chuyển',
+					'ru' => '[{site_title}] Заказ №{order_number} отправлен',
+					'hi' => '[{site_title}] ऑर्डर #{order_number} भेज दिया गया',
+					'zh' => '[{site_title}] 订单 #{order_number} 已发货',
+					'ko' => '[{site_title}] 주문 #{order_number}이(가) 발송되었습니다',
+					'ja' => '[{site_title}] ご注文 #{order_number} を発送しました',
+				),
 			);
 		}
 
@@ -227,5 +351,22 @@ if ( ! function_exists( 'epic_email_str' ) ) {
 			return $strings[ $key ]['en'];
 		}
 		return '';
+	}
+
+	/**
+	 * Normalizes a storefront locale to a supported base code, falling back to
+	 * Vietnamese (the store's primary customer base) for unknown/blank values
+	 * such as "unknown".
+	 *
+	 * @param string $locale
+	 * @return string
+	 */
+	function epic_email_locale( $locale ) {
+		$supported = array( 'en', 'vi', 'ru', 'hi', 'zh', 'ko', 'ja' );
+		$locale    = is_string( $locale ) ? strtolower( trim( $locale ) ) : '';
+		if ( strlen( $locale ) > 2 && false !== strpos( $locale, '-' ) ) {
+			$locale = substr( $locale, 0, 2 );
+		}
+		return in_array( $locale, $supported, true ) ? $locale : 'vi';
 	}
 }

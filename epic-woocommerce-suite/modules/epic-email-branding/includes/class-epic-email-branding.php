@@ -27,7 +27,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+$epic_email_branding_i18n = __DIR__ . '/epic-email-i18n.php';
+if ( file_exists( $epic_email_branding_i18n ) ) {
+	require_once $epic_email_branding_i18n;
+}
+
 class Epic_Email_Branding {
+
+	/** Locale of the email currently rendering — set by render_header so the
+	 *  plain-text footer (which receives no WC_Email object) can reuse it. */
+	private static $current_locale = 'vi';
 
 	public static function init() {
 		// Priority 20 = after WC_Emails::email_header() (priority 10).
@@ -73,6 +82,48 @@ class Epic_Email_Branding {
 	}
 
 	/**
+	 * The storefront locale this email should render in, from the richest
+	 * signal available: a locale property the EPIC email classes set
+	 * (subscriber_locale / request_locale / lead_locale / broadcast_locale),
+	 * else the order's `_epic_locale` meta, else the last header's locale,
+	 * else Vietnamese (the store's primary customer base).
+	 *
+	 * @param mixed $email WC_Email|null
+	 * @return string One of en|vi|ru|hi|zh|ko|ja.
+	 */
+	private static function resolve_locale( $email = null ) {
+		$supported = array( 'en', 'vi', 'ru', 'hi', 'zh', 'ko', 'ja' );
+		$candidates = array();
+
+		if ( is_object( $email ) ) {
+			foreach ( array( 'subscriber_locale', 'request_locale', 'lead_locale', 'broadcast_locale', 'epic_locale' ) as $prop ) {
+				if ( isset( $email->$prop ) && is_string( $email->$prop ) && '' !== trim( $email->$prop ) ) {
+					$candidates[] = $email->$prop;
+				}
+			}
+			$obj = method_exists( $email, 'get_object' ) ? $email->get_object() : ( $email->object ?? null );
+			if ( is_object( $obj ) && method_exists( $obj, 'get_meta' ) ) {
+				$meta = (string) $obj->get_meta( '_epic_locale' );
+				if ( '' !== $meta && 'unknown' !== $meta ) {
+					$candidates[] = $meta;
+				}
+			}
+		}
+
+		foreach ( $candidates as $candidate ) {
+			$value = is_string( $candidate ) ? strtolower( trim( $candidate ) ) : '';
+			if ( strlen( $value ) > 2 && false !== strpos( $value, '-' ) ) {
+				$value = substr( $value, 0, 2 );
+			}
+			if ( in_array( $value, $supported, true ) ) {
+				return $value;
+			}
+		}
+
+		return in_array( self::$current_locale, $supported, true ) ? self::$current_locale : 'vi';
+	}
+
+	/**
 	 * Branded bar printed at the top of every HTML email body, right after
 	 * WooCommerce's own header (logo + heading).
 	 *
@@ -81,6 +132,8 @@ class Epic_Email_Branding {
 	 */
 	public static function render_header( $email_heading, $email = null ) {
 		$c = self::contact();
+		$locale = self::resolve_locale( $email );
+		self::$current_locale = $locale;
 		?>
 		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 12px;">
 			<tr>
@@ -89,10 +142,10 @@ class Epic_Email_Branding {
 						<?php echo esc_html( $c['brand'] ); ?>
 					</div>
 					<div style="margin-top:5px;font-size:11px;line-height:1.5;color:#c7bcac;">
-						<?php echo esc_html( $c['tagline'] ); ?>
+						<?php echo esc_html( epic_email_str( 'brand_tagline', $locale ) ); ?>
 					</div>
 					<div style="margin-top:8px;font-size:11px;line-height:1.6;color:#c7bcac;">
-						<?php esc_html_e( 'Hotline', 'epic-email-branding' ); ?>
+						<?php echo esc_html( epic_email_str( 'label_hotline', $locale ) ); ?>
 						<a href="tel:<?php echo esc_attr( $c['phone_href'] ); ?>" style="color:#e8a35a;text-decoration:none;"><?php echo esc_html( $c['phone'] ); ?></a>
 						&nbsp;·&nbsp;
 						<a href="<?php echo esc_url( $c['website'] ); ?>" style="color:#e8a35a;text-decoration:none;"><?php echo esc_html( preg_replace( '#^https?://#', '', $c['website'] ) ); ?></a>
@@ -117,20 +170,29 @@ class Epic_Email_Branding {
 	 * @return string
 	 */
 	public static function footer_text( $text, $email = null ) {
-		$c    = self::contact();
+		$c                    = self::contact();
+		$locale               = self::resolve_locale( $email );
+		self::$current_locale = $locale;
 		$year = date_i18n( 'Y' );
+
+		$label_cafe     = epic_email_str( 'label_cafe', $locale );
+		$label_roastery = epic_email_str( 'label_roastery', $locale );
+		$label_hotline  = epic_email_str( 'label_hotline', $locale );
+		$label_email    = epic_email_str( 'label_email', $locale );
+		$hours          = epic_email_str( 'brand_hours', $locale );
+		$rights         = epic_email_str( 'brand_rights', $locale );
 
 		if ( $email instanceof WC_Email ) {
 			ob_start();
 			?>
 <strong><?php echo esc_html( $c['brand'] ); ?></strong><br />
-<?php esc_html_e( 'Café', 'epic-email-branding' ); ?> · <?php echo esc_html( $c['cafe'] ); ?><br />
-<?php esc_html_e( 'Roastery', 'epic-email-branding' ); ?> · <?php echo esc_html( $c['roastery'] ); ?><br />
-<?php esc_html_e( 'Hotline', 'epic-email-branding' ); ?> <a href="tel:<?php echo esc_attr( $c['phone_href'] ); ?>"><?php echo esc_html( $c['phone'] ); ?></a>
-· <?php esc_html_e( 'Email', 'epic-email-branding' ); ?> <a href="mailto:<?php echo esc_attr( $c['email'] ); ?>"><?php echo esc_html( $c['email'] ); ?></a><br />
+<?php echo esc_html( $label_cafe ); ?> · <?php echo esc_html( $c['cafe'] ); ?><br />
+<?php echo esc_html( $label_roastery ); ?> · <?php echo esc_html( $c['roastery'] ); ?><br />
+<?php echo esc_html( $label_hotline ); ?> <a href="tel:<?php echo esc_attr( $c['phone_href'] ); ?>"><?php echo esc_html( $c['phone'] ); ?></a>
+· <?php echo esc_html( $label_email ); ?> <a href="mailto:<?php echo esc_attr( $c['email'] ); ?>"><?php echo esc_html( $c['email'] ); ?></a><br />
 <a href="<?php echo esc_url( $c['website'] ); ?>"><?php echo esc_html( preg_replace( '#^https?://#', '', $c['website'] ) ); ?></a>
 · <a href="<?php echo esc_url( $c['instagram'] ); ?>">Instagram</a><br />
-<?php echo esc_html( $c['hours'] ); ?> · &copy; <?php echo esc_html( $year ); ?> <?php echo esc_html( $c['brand'] ); ?>. <?php esc_html_e( 'All rights reserved.', 'epic-email-branding' ); ?>
+<?php echo esc_html( $hours ); ?> · &copy; <?php echo esc_html( $year ); ?> <?php echo esc_html( $c['brand'] ); ?>. <?php echo esc_html( $rights ); ?>
 			<?php
 			return trim( (string) ob_get_clean() );
 		}
@@ -138,14 +200,14 @@ class Epic_Email_Branding {
 		// Plain-text variant.
 		$lines = array(
 			$c['brand'],
-			'Café: ' . $c['cafe'],
-			'Roastery: ' . $c['roastery'],
-			'Hotline: ' . $c['phone'],
-			'Email: ' . $c['email'],
+			$label_cafe . ': ' . $c['cafe'],
+			$label_roastery . ': ' . $c['roastery'],
+			$label_hotline . ': ' . $c['phone'],
+			$label_email . ': ' . $c['email'],
 			'Website: ' . $c['website'],
 			'Instagram: ' . $c['instagram'],
-			$c['hours'],
-			'© ' . $year . ' ' . $c['brand'] . '. All rights reserved.',
+			$hours,
+			'© ' . $year . ' ' . $c['brand'] . '. ' . $rights,
 		);
 
 		return implode( "\n", $lines );

@@ -26,6 +26,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( file_exists( __DIR__ . '/epic-email-i18n.php' ) ) {
+	require_once __DIR__ . '/epic-email-i18n.php';
+}
+
 class Epic_Email_Sample_Confirmation extends WC_Email {
 
 	/** @var string */
@@ -129,6 +133,12 @@ class Epic_Email_Sample_Confirmation extends WC_Email {
 		$this->request_locale  = isset( $data['locale'] ) ? (string) $data['locale'] : 'unknown';
 		$this->submitted_at    = isset( $data['submitted_at'] ) ? (string) $data['submitted_at'] : current_time( 'mysql' );
 		$this->recipient       = $this->requester_email;
+
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			$epic_locale   = epic_email_locale( $this->request_locale );
+			$this->heading = epic_email_str( 'heading_sample', $epic_locale );
+			$this->subject = epic_email_str( 'subject_sample', $epic_locale );
+		}
 
 		$this->placeholders['{name}'] = $this->requester_name;
 
