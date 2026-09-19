@@ -8,13 +8,10 @@
  * — same content WooCommerce's native order emails render, just wrapped in
  * EPIC's own greeting/heading instead of the stock copy.
  *
- * Vietnamese-only content, per the store's customer base. Hard-coded rather
- * than routed through WordPress's gettext .mo translation system: this
- * project's other plugins ship an empty /languages folder with no compiled
- * .mo (see epic-ghn-shipping/languages), so there's no existing translation
- * pipeline here to plug into. If a real i18n pipeline gets set up later
- * (e.g. to also support an English-language version of this email), these
- * hard-coded strings can move behind __() calls with an actual .mo instead.
+ * Locale-aware: the storefront locale captured at checkout is stored on the
+ * order as `_epic_locale` meta, and the body copy is looked up from
+ * includes/epic-email-i18n.php via epic_email_str(). Unknown/legacy orders
+ * fall back to Vietnamese, preserving the previous behaviour.
  *
  * @var WC_Order $order
  * @var string   $email_heading
@@ -28,6 +25,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
+
+$epic_locale = ( $order instanceof WC_Order ) ? (string) $order->get_meta( '_epic_locale' ) : '';
+if ( '' === $epic_locale ) {
+	$epic_locale = 'vi';
+}
+
 do_action( 'woocommerce_email_header', $email_heading, $email );
 ?>
 
@@ -35,13 +39,13 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 	<?php
 	printf(
 		/* translators: %s: customer first name */
-		esc_html__( 'Chào %s,', 'epic-order-emails' ),
+		esc_html( epic_email_str( 'or_hi', $epic_locale ) ),
 		esc_html( $order->get_billing_first_name() )
 	);
 	?>
 </p>
 <p>
-	<?php esc_html_e( 'Cảm ơn bạn đã đặt hàng tại EPIC Roastery. Chúng tôi đã nhận được đơn hàng của bạn và đang chuẩn bị.', 'epic-order-emails' ); ?>
+	<?php echo esc_html( epic_email_str( 'or_thanks', $epic_locale ) ); ?>
 </p>
 
 <?php
@@ -59,7 +63,7 @@ do_action( 'woocommerce_email_customer_details', $order, $sent_to_admin, $plain_
 ?>
 
 <p>
-	<?php esc_html_e( 'Chúng tôi sẽ gửi thêm email khi đơn hàng được giao cho đơn vị vận chuyển, kèm mã vận đơn để bạn theo dõi.', 'epic-order-emails' ); ?>
+	<?php echo esc_html( epic_email_str( 'or_ship_note', $epic_locale ) ); ?>
 </p>
 
 <?php

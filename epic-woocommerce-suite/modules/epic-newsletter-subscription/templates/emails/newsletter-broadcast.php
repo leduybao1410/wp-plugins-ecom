@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$is_english = 'en' === $broadcast_locale;
+require_once dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
 
 do_action( 'woocommerce_email_header', $email_heading, $email );
 ?>
@@ -40,13 +40,7 @@ echo wp_kses_post( $broadcast_body );
 ?>
 
 <p style="font-size: 12px; color: #999999;">
-	<?php
-	if ( $is_english ) {
-		esc_html_e( 'You\'re receiving this because you subscribed to the EPIC Roastery newsletter. To unsubscribe, just reply to this email and we\'ll take care of it.', 'epic-newsletter-subscription' );
-	} else {
-		esc_html_e( 'Bạn nhận được email này vì đã đăng ký nhận tin từ EPIC Roastery. Để hủy đăng ký, chỉ cần trả lời email này và chúng tôi sẽ xử lý ngay.', 'epic-newsletter-subscription' );
-	}
-	?>
+	<?php echo esc_html( epic_email_str( 'bc_unsub', $broadcast_locale ) ); ?>
 </p>
 
 <?php

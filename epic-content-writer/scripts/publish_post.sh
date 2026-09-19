@@ -6,6 +6,10 @@
 #   WC_URL          e.g. https://admin.epicroastery.coffee
 #   WP_USER         WordPress username
 #   WP_APP_PASSWORD WordPress Application Password (with spaces, quote it)
+#                   — OR, if none is configured, WP_PASSWORD (the account
+#                   login password, authenticated via the JWT endpoint).
+#                   WordPress rejects a login password over HTTP Basic, so
+#                   JWT is the only way to use one non-interactively.
 #
 # Usage:
 #   publish_post.sh \
@@ -55,7 +59,6 @@ done
 
 : "${WC_URL:?Set WC_URL}"
 : "${WP_USER:?Set WP_USER}"
-: "${WP_APP_PASSWORD:?Set WP_APP_PASSWORD}"
 : "${CATEGORY_ID:?Set --category-id}"
 : "${SLUG:?Set --slug}"
 : "${TITLE_VI:?Set --title-vi}"
@@ -63,7 +66,14 @@ done
 : "${TITLE_EN:?Set --title-en}"
 : "${CONTENT_FILE_EN:?Set --content-file-en}"
 
-AUTH=(-u "${WP_USER}:${WP_APP_PASSWORD}")
+# Auth: prefer an Application Password over HTTP Basic (WP_APP_PASSWORD); fall
+# back to the account login password via JWT (WP_PASSWORD) when no app password
+# is configured. WordPress only accepts Application Passwords over Basic Auth,
+# so a plain login password MUST go through the JWT endpoint.
+if [[ -z "${WP_APP_PASSWORD:-}" && -z "${WP_PASSWORD:-}" ]]; then
+  echo "Set either WP_APP_PASSWORD (Basic Auth) or WP_PASSWORD (JWT)." >&2
+  exit 1
+fi
 
 # This WP install sometimes leaks PHP warnings (display_errors on) as raw
 # HTML *before* the actual JSON body on an otherwise-successful REST
@@ -77,6 +87,20 @@ m = re.search(r'[\{\[]', raw)
 sys.stdout.write(raw[m.start():] if m else raw)
 "
 }
+
+if [[ -n "${WP_APP_PASSWORD:-}" ]]; then
+  AUTH=(-u "${WP_USER}:${WP_APP_PASSWORD}")
+else
+  TOKEN=$(curl -s -X POST "$WC_URL/wp-json/jwt-auth/v1/token" \
+    --data-urlencode "username=${WP_USER}" \
+    --data-urlencode "password=${WP_PASSWORD}" | json_clean \
+    | python3 -c "import json,sys;print(json.load(sys.stdin).get('token',''))")
+  if [[ -z "$TOKEN" ]]; then
+    echo "JWT auth failed for user ${WP_USER}." >&2
+    exit 1
+  fi
+  AUTH=(-H "Authorization: Bearer ${TOKEN}")
+fi
 
 # This host occasionally drops the TLS connection outright (curl exit 35,
 # or just an empty body) — transient, not a real failure. Retry a few

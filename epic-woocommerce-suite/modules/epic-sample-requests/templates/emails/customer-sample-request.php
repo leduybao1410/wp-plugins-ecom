@@ -29,38 +29,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$is_english = 'en' === $request_locale;
+require_once dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
+
 $taste_text = $taste_label_vi ? $taste_label_vi : $taste;
 $brew_text  = $brew_label_vi ? $brew_label_vi : $brew;
 
 do_action( 'woocommerce_email_header', $email_heading, $email );
 ?>
 
-<?php if ( $is_english ) : ?>
-	<p><?php echo esc_html( sprintf( 'Hi %s,', $requester_name ) ); ?></p>
-	<p>Thank you for requesting a free sample from EPIC Coffee Roaster. We've received your request and will send it out to you shortly.</p>
-	<p><strong>Delivering to:</strong> <?php echo esc_html( $address ); ?></p>
+	<p><?php printf( esc_html( epic_email_str( 'sp_hi', $request_locale ) ), esc_html( $requester_name ) ); ?></p>
+	<p><?php echo esc_html( epic_email_str( 'sp_thanks', $request_locale ) ); ?></p>
+	<p><strong><?php echo esc_html( epic_email_str( 'sp_deliver', $request_locale ) ); ?></strong> <?php echo esc_html( $address ); ?></p>
 	<?php if ( $taste_text || $brew_text ) : ?>
 	<p>
-		<?php if ( $taste_text ) : ?><strong>Favourite taste:</strong> <?php echo esc_html( $taste_text ); ?><?php endif; ?>
+		<?php if ( $taste_text ) : ?><strong><?php echo esc_html( epic_email_str( 'sp_taste', $request_locale ) ); ?></strong> <?php echo esc_html( $taste_text ); ?><?php endif; ?>
 		<?php if ( $taste_text && $brew_text ) : ?><br /><?php endif; ?>
-		<?php if ( $brew_text ) : ?><strong>Brew style:</strong> <?php echo esc_html( $brew_text ); ?><?php endif; ?>
+		<?php if ( $brew_text ) : ?><strong><?php echo esc_html( epic_email_str( 'sp_brew', $request_locale ) ); ?></strong> <?php echo esc_html( $brew_text ); ?><?php endif; ?>
 	</p>
 	<?php endif; ?>
-	<p>Our team will contact you by phone if we need to confirm anything about the delivery. If any of the details above look wrong, just reply to this email and we'll fix it.</p>
-<?php else : ?>
-	<p><?php echo esc_html( sprintf( 'Chào %s,', $requester_name ) ); ?></p>
-	<p>Cảm ơn bạn đã đăng ký nhận mẫu cà phê miễn phí từ EPIC Coffee Roaster. Chúng tôi đã nhận được yêu cầu và sẽ gửi mẫu đến bạn trong thời gian sớm nhất.</p>
-	<p><strong>Địa chỉ nhận mẫu:</strong> <?php echo esc_html( $address ); ?></p>
-	<?php if ( $taste_text || $brew_text ) : ?>
-	<p>
-		<?php if ( $taste_text ) : ?><strong>Khẩu vị bạn chọn:</strong> <?php echo esc_html( $taste_text ); ?><?php endif; ?>
-		<?php if ( $taste_text && $brew_text ) : ?><br /><?php endif; ?>
-		<?php if ( $brew_text ) : ?><strong>Cách pha:</strong> <?php echo esc_html( $brew_text ); ?><?php endif; ?>
-	</p>
-	<?php endif; ?>
-	<p>Nếu cần xác nhận thông tin giao hàng, đội ngũ của chúng tôi sẽ liên hệ với bạn qua số điện thoại đã cung cấp. Nếu có thông tin nào chưa đúng, bạn chỉ cần trả lời email này và chúng tôi sẽ điều chỉnh.</p>
-<?php endif; ?>
+	<p><?php echo esc_html( epic_email_str( 'sp_contact', $request_locale ) ); ?></p>
 
 <?php
 if ( $additional_content ) {

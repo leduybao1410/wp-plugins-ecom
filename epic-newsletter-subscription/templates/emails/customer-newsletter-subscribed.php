@@ -26,27 +26,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$is_english = 'en' === $subscriber_locale;
+require_once dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
 
 do_action( 'woocommerce_email_header', $email_heading, $email );
 ?>
 
-<?php if ( $is_english ) : ?>
-	<p>Thanks for subscribing to the EPIC Roastery newsletter.</p>
-	<p>You're on the list — we'll send you new bean releases, roastery updates and any future promotion coupons as soon as they're out.</p>
-<?php else : ?>
-	<p>Cảm ơn bạn đã đăng ký nhận tin từ EPIC Roastery.</p>
-	<p>Bạn đã vào danh sách — chúng tôi sẽ gửi cho bạn cà phê mới ra mắt, cập nhật từ xưởng rang và mã giảm giá trong tương lai ngay khi có.</p>
-<?php endif; ?>
+<p><?php echo esc_html( epic_email_str( 'nl_thanks', $subscriber_locale ) ); ?></p>
+<p><?php echo esc_html( epic_email_str( 'nl_body', $subscriber_locale ) ); ?></p>
 
 <p>
-	<?php
-	if ( $is_english ) {
-		esc_html_e( 'If this wasn\'t you, or you\'d like to unsubscribe at any time, just reply to this email and we\'ll take care of it.', 'epic-newsletter-subscription' );
-	} else {
-		esc_html_e( 'Nếu không phải bạn đăng ký, hoặc bạn muốn hủy nhận tin bất cứ lúc nào, chỉ cần trả lời email này và chúng tôi sẽ xử lý ngay.', 'epic-newsletter-subscription' );
-	}
-	?>
+	<?php echo esc_html( epic_email_str( 'nl_unsub', $subscriber_locale ) ); ?>
 </p>
 
 <?php
