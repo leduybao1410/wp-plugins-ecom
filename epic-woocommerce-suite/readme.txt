@@ -4,7 +4,7 @@ Tags: woocommerce, coupons, shipping, ghn, newsletter, reviews, wholesale, order
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -103,6 +103,15 @@ copy to avoid redeclaring its classes. Deactivate the standalone plugin.
 No — same modules, same class names. Use one or the other.
 
 == Changelog ==
+
+= 1.4.0 =
+* Localized customer emails: new `includes/epic-email-i18n.php` provides
+  customer-facing copy for en, vi, ru, hi, zh, ko and ja (region tags resolve
+  to their base language; unknown locales fall back to English). Newsletter
+  confirmation + broadcast footer, free-sample confirmation, and the
+  order-created / order-shipped emails now render in the storefront locale the
+  customer used — order emails read the `_epic_locale` order meta, with a
+  Vietnamese fallback for legacy orders. Staff admin emails stay Vietnamese.
 
 = 1.3.0 =
 * Added epic-email-branding 1.0.0: a global branded header bar plus a
