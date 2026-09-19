@@ -29,38 +29,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+$epic_email_i18n = dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
+if ( file_exists( $epic_email_i18n ) ) {
+	require_once $epic_email_i18n;
+}
+$epic_locale = function_exists( 'epic_email_locale' ) ? epic_email_locale( $lead_locale ) : 'vi';
+
 do_action( 'woocommerce_email_header', $email_heading, $email );
 ?>
 
 <p>
-	<?php esc_html_e( 'Có một yêu cầu báo giá sỉ mới được gửi từ website.', 'epic-wholesale-inquiries' ); ?>
+	<?php echo esc_html( epic_email_str( 'wi_admin_intro', $epic_locale ) ); ?>
 </p>
 
 <table cellspacing="0" cellpadding="6" style="width:100%; border:1px solid #e5e5e5; margin: 16px 0;">
 	<tr>
-		<td style="padding:12px; background:#f7f7f7; width:180px;"><strong><?php esc_html_e( 'Tên doanh nghiệp', 'epic-wholesale-inquiries' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7; width:180px;"><strong><?php echo esc_html( epic_email_str( 'wi_admin_business_label', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;"><?php echo esc_html( $business_name ); ?></td>
 	</tr>
 	<tr>
-		<td style="padding:12px; background:#f7f7f7;"><strong><?php esc_html_e( 'Số điện thoại', 'epic-wholesale-inquiries' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7;"><strong><?php echo esc_html( epic_email_str( 'label_phone', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;"><?php echo esc_html( $phone ); ?></td>
 	</tr>
 	<tr>
-		<td style="padding:12px; background:#f7f7f7;"><strong><?php esc_html_e( 'Liên hệ', 'epic-wholesale-inquiries' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7;"><strong><?php echo esc_html( epic_email_str( 'wi_admin_contact_label', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;"><?php echo esc_html( $contact ); ?></td>
 	</tr>
 	<tr>
-		<td style="padding:12px; background:#f7f7f7;"><strong><?php esc_html_e( 'Loại yêu cầu', 'epic-wholesale-inquiries' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7;"><strong><?php echo esc_html( epic_email_str( 'wi_admin_topic_label', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;"><?php echo esc_html( $topic_label_vi ? $topic_label_vi : $topic ); ?></td>
 	</tr>
 	<?php if ( $details ) : ?>
 	<tr>
-		<td style="padding:12px; background:#f7f7f7; vertical-align:top;"><strong><?php esc_html_e( 'Nội dung', 'epic-wholesale-inquiries' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7; vertical-align:top;"><strong><?php echo esc_html( epic_email_str( 'wi_admin_details_label', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px; white-space:pre-wrap;"><?php echo esc_html( $details ); ?></td>
 	</tr>
 	<?php endif; ?>
 	<tr>
-		<td style="padding:12px; background:#f7f7f7;"><strong><?php esc_html_e( 'Thời gian gửi', 'epic-wholesale-inquiries' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7;"><strong><?php echo esc_html( epic_email_str( 'label_submitted_at', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;">
 			<?php
 			echo esc_html( $submitted_at );

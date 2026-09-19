@@ -23,18 +23,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+$epic_email_i18n = dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
+if ( file_exists( $epic_email_i18n ) ) {
+	require_once $epic_email_i18n;
+}
+$epic_locale = function_exists( 'epic_email_locale' ) ? epic_email_locale( $lead_locale ) : 'vi';
+
 echo esc_html( wp_strip_all_tags( $email_heading ) ) . "\n\n";
 
-echo esc_html__( 'Có một yêu cầu báo giá sỉ mới được gửi từ website.', 'epic-wholesale-inquiries' ) . "\n\n";
+echo esc_html( epic_email_str( 'wi_admin_intro', $epic_locale ) ) . "\n\n";
 
-echo esc_html__( 'Tên doanh nghiệp:', 'epic-wholesale-inquiries' ) . ' ' . esc_html( $business_name ) . "\n";
-echo esc_html__( 'Số điện thoại:', 'epic-wholesale-inquiries' ) . ' ' . esc_html( $phone ) . "\n";
-echo esc_html__( 'Liên hệ:', 'epic-wholesale-inquiries' ) . ' ' . esc_html( $contact ) . "\n";
-echo esc_html__( 'Loại yêu cầu:', 'epic-wholesale-inquiries' ) . ' ' . esc_html( $topic_label_vi ? $topic_label_vi : $topic ) . "\n";
+echo ( esc_html( epic_email_str( 'wi_admin_business_label', $epic_locale ) ) . ':' ) . ' ' . esc_html( $business_name ) . "\n";
+echo ( esc_html( epic_email_str( 'label_phone', $epic_locale ) ) . ':' ) . ' ' . esc_html( $phone ) . "\n";
+echo ( esc_html( epic_email_str( 'wi_admin_contact_label', $epic_locale ) ) . ':' ) . ' ' . esc_html( $contact ) . "\n";
+echo ( esc_html( epic_email_str( 'wi_admin_topic_label', $epic_locale ) ) . ':' ) . ' ' . esc_html( $topic_label_vi ? $topic_label_vi : $topic ) . "\n";
 if ( $details ) {
-	echo esc_html__( 'Nội dung:', 'epic-wholesale-inquiries' ) . "\n" . esc_html( $details ) . "\n";
+	echo ( esc_html( epic_email_str( 'wi_admin_details_label', $epic_locale ) ) . ':' ) . "\n" . esc_html( $details ) . "\n";
 }
-echo esc_html__( 'Thời gian gửi:', 'epic-wholesale-inquiries' ) . ' ' . esc_html( $submitted_at );
+echo ( esc_html( epic_email_str( 'label_submitted_at', $epic_locale ) ) . ':' ) . ' ' . esc_html( $submitted_at );
 if ( $lead_locale && 'unknown' !== $lead_locale ) {
 	echo ' (' . esc_html( $lead_locale ) . ')';
 }

@@ -149,6 +149,25 @@ class Epic_Email_Order_Shipped extends WC_Email {
 		$this->restore_locale();
 	}
 
+
+	/** Localized heading — the order's storefront locale, not WC's saved setting. */
+	public function get_heading() {
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			$locale = epic_email_locale( $this->object instanceof WC_Order ? $this->object->get_meta( '_epic_locale' ) : '' );
+			return epic_email_str( 'heading_order_shipped', $locale );
+		}
+		return parent::get_heading();
+	}
+
+	/** Localized subject (placeholders applied via format_string). */
+	public function get_subject() {
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			$locale = epic_email_locale( $this->object instanceof WC_Order ? $this->object->get_meta( '_epic_locale' ) : '' );
+			return $this->format_string( epic_email_str( 'subject_order_shipped', $locale ) );
+		}
+		return parent::get_subject();
+	}
+
 	public function get_content_html() {
 		return wc_get_template_html(
 			$this->template_html,

@@ -136,6 +136,23 @@ class Epic_Email_Newsletter_Confirmation extends WC_Email {
 		$this->restore_locale();
 	}
 
+
+	/** Localized heading — the customer's storefront locale, not WC's saved setting. */
+	public function get_heading() {
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			return epic_email_str( 'heading_newsletter', epic_email_locale( $this->subscriber_locale ) );
+		}
+		return parent::get_heading();
+	}
+
+	/** Localized subject (placeholders applied via format_string). */
+	public function get_subject() {
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			return $this->format_string( epic_email_str( 'subject_newsletter', epic_email_locale( $this->subscriber_locale ) ) );
+		}
+		return parent::get_subject();
+	}
+
 	public function get_content_html() {
 		return wc_get_template_html(
 			$this->template_html,

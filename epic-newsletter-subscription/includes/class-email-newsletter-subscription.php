@@ -22,6 +22,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( file_exists( __DIR__ . '/epic-email-i18n.php' ) ) {
+	require_once __DIR__ . '/epic-email-i18n.php';
+}
+
 class Epic_Email_Newsletter_Subscription extends WC_Email {
 
 	/** @var string */
@@ -100,6 +104,12 @@ class Epic_Email_Newsletter_Subscription extends WC_Email {
 
 		$this->email            = (string) $data['email'];
 		$this->subscriber_locale = isset( $data['locale'] ) ? (string) $data['locale'] : 'unknown';
+
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			$epic_locale   = epic_email_locale( $this->subscriber_locale );
+			$this->heading = epic_email_str( 'nl_admin_heading', $epic_locale );
+			$this->subject = epic_email_str( 'nl_admin_subject', $epic_locale );
+		}
 		$this->subscribed_at    = isset( $data['subscribed_at'] ) ? (string) $data['subscribed_at'] : current_time( 'mysql' );
 
 		$this->placeholders['{subscriber_email}'] = $this->email;
@@ -147,6 +157,23 @@ class Epic_Email_Newsletter_Subscription extends WC_Email {
 		}
 
 		$this->restore_locale();
+	}
+
+
+	/** Localized heading — the customer's storefront locale, not WC's saved setting. */
+	public function get_heading() {
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			return epic_email_str( 'nl_admin_heading', epic_email_locale( $this->subscriber_locale ) );
+		}
+		return parent::get_heading();
+	}
+
+	/** Localized subject (placeholders applied via format_string). */
+	public function get_subject() {
+		if ( function_exists( 'epic_email_locale' ) && function_exists( 'epic_email_str' ) ) {
+			return $this->format_string( epic_email_str( 'nl_admin_subject', epic_email_locale( $this->subscriber_locale ) ) );
+		}
+		return parent::get_subject();
 	}
 
 	public function get_content_html() {

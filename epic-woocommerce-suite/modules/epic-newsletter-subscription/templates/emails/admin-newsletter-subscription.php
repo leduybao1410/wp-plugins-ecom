@@ -25,20 +25,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+$epic_email_i18n = dirname( __DIR__, 2 ) . '/includes/epic-email-i18n.php';
+if ( file_exists( $epic_email_i18n ) ) {
+	require_once $epic_email_i18n;
+}
+$epic_locale = function_exists( 'epic_email_locale' ) ? epic_email_locale( $subscriber_locale ) : 'vi';
+
 do_action( 'woocommerce_email_header', $email_heading, $email );
 ?>
 
 <p>
-	<?php esc_html_e( 'Có một người mới đăng ký nhận tin từ website.', 'epic-newsletter-subscription' ); ?>
+	<?php echo esc_html( epic_email_str( 'nl_admin_intro', $epic_locale ) ); ?>
 </p>
 
 <table cellspacing="0" cellpadding="6" style="width:100%; border:1px solid #e5e5e5; margin: 16px 0;">
 	<tr>
-		<td style="padding:12px; background:#f7f7f7; width:180px;"><strong><?php esc_html_e( 'Email', 'epic-newsletter-subscription' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7; width:180px;"><strong><?php echo esc_html( epic_email_str( 'label_email', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;"><?php echo esc_html( $subscriber_email ); ?></td>
 	</tr>
 	<tr>
-		<td style="padding:12px; background:#f7f7f7;"><strong><?php esc_html_e( 'Thời gian đăng ký', 'epic-newsletter-subscription' ); ?></strong></td>
+		<td style="padding:12px; background:#f7f7f7;"><strong><?php echo esc_html( epic_email_str( 'label_subscribed_at', $epic_locale ) ); ?></strong></td>
 		<td style="padding:12px;">
 			<?php
 			echo esc_html( $subscribed_at );
@@ -51,7 +57,7 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 </table>
 
 <p>
-	<?php esc_html_e( 'Danh sách người đăng ký đầy đủ nằm trong WooCommerce → Newsletter Subscribers.', 'epic-newsletter-subscription' ); ?>
+	<?php echo esc_html( epic_email_str( 'nl_admin_list_note', $epic_locale ) ); ?>
 </p>
 
 <?php
