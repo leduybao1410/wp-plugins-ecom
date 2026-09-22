@@ -1,6 +1,6 @@
 <?php
 /**
- * Customer "order shipped" email (HTML) — the GHN tracking code email.
+ * Customer "order shipped" email (HTML) — the ViettelPost tracking code email.
  *
  * Locale-aware — same `_epic_locale` order meta + epic_email_str() lookup as
  * customer-order-created.php, with a Vietnamese fallback.
@@ -30,7 +30,7 @@ if ( '' === $epic_locale ) {
 
 do_action( 'woocommerce_email_header', $email_heading, $email );
 
-$tracking_url = function_exists( 'epic_order_emails_ghn_tracking_url' ) ? epic_order_emails_ghn_tracking_url( $tracking_code ) : '';
+$tracking_url = function_exists( 'epic_order_emails_viettelpost_tracking_url' ) ? epic_order_emails_viettelpost_tracking_url( $tracking_code ) : '';
 ?>
 
 <p>

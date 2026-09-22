@@ -1,21 +1,20 @@
 <?php
 /**
- * "Your order has shipped" customer email — carries the GHN tracking code.
+ * "Your order has shipped" customer email — carries the ViettelPost waybill.
  *
  * Unlike class-email-order-created.php, this one has no WooCommerce order
- * status transition to hook: GHN shipment booking doesn't change the order's
- * WooCommerce status at all (see epic-ghn-shipping's book_single_order() /
- * Epic_GHN_Bundle::confirm() — both only ever write `_ghn_order_code` and
- * friends onto order meta, plus an order note). Instead this listens for a
- * plugin-agnostic action, `epic_ghn_shipment_booked`, fired from both of
- * epic-ghn-shipping's successful-booking call sites once that plugin has
- * been updated to fire it (see its class-ajax.php / class-bundle.php).
+ * status transition to hook: shipment booking doesn't change the order's
+ * WooCommerce status at all (see epic-viettelpost-shipping's
+ * book_single_order() — it only ever writes `_vtp_order_number` and friends
+ * onto order meta, plus an order note). Instead this listens for a
+ * plugin-agnostic action, `epic_vtp_shipment_booked`, fired from
+ * epic-viettelpost-shipping's successful-booking call sites.
  *
- * Deliberately NOT a hard dependency on epic-ghn-shipping being active: this
- * class only ever runs its trigger() method if something actually calls
- * do_action( 'epic_ghn_shipment_booked', ... ) — if epic-ghn-shipping is
- * deactivated, this email class still registers (so it shows up, disabled,
- * under WooCommerce -> Settings -> Emails) but simply never fires.
+ * Deliberately NOT a hard dependency on epic-viettelpost-shipping being
+ * active: this class only ever runs its trigger() method if something
+ * actually calls do_action( 'epic_vtp_shipment_booked', ... ) — if that
+ * plugin is deactivated, this email class still registers (so it shows up,
+ * disabled, under WooCommerce -> Settings -> Emails) but simply never fires.
  *
  * @package Epic_Order_Emails
  */
@@ -30,10 +29,10 @@ if ( file_exists( __DIR__ . '/epic-email-i18n.php' ) ) {
 
 class Epic_Email_Order_Shipped extends WC_Email {
 
-	/** @var string GHN tracking code for the current send — set by trigger(), read by the templates. */
+	/** @var string ViettelPost waybill number for the current send — set by trigger(), read by the templates. */
 	public $tracking_code = '';
 
-	/** @var string GHN's ETA string for the current send, if any. */
+	/** @var string ViettelPost's ETA string for the current send, if any. */
 	public $eta = '';
 
 	/** @var bool Whether this order collects COD on delivery — the courier still needs cash ready. */
@@ -45,8 +44,8 @@ class Epic_Email_Order_Shipped extends WC_Email {
 	public function __construct() {
 		$this->id             = 'epic_order_shipped';
 		$this->customer_email = true;
-		$this->title          = __( 'EPIC: Order Shipped (GHN tracking code)', 'epic-order-emails' );
-		$this->description    = __( 'Sent to the customer once a staff member books the GHN shipment for their order (from the order screen\'s "Ship via GHN" button, the Orders list bulk action, or a bundle confirm) — carries the GHN tracking code and, for COD orders, the amount due on delivery.', 'epic-order-emails' );
+		$this->title          = __( 'EPIC: Order Shipped (ViettelPost tracking code)', 'epic-order-emails' );
+		$this->description    = __( 'Sent to the customer once a staff member books the ViettelPost shipment for their order (from the order screen\'s "Ship via ViettelPost" button or the Orders list action) — carries the ViettelPost tracking code and, for COD orders, the amount due on delivery.', 'epic-order-emails' );
 
 		$this->template_html  = 'emails/customer-order-shipped.php';
 		$this->template_plain = 'emails/plain/customer-order-shipped.php';
@@ -56,6 +55,10 @@ class Epic_Email_Order_Shipped extends WC_Email {
 			'{tracking_code}'  => '',
 		);
 
+		// `epic_ghn_shipment_booked` is kept for back-compat with any store
+		// still running the old GHN plugin; the current carrier is
+		// epic-viettelpost-shipping, which fires `epic_vtp_shipment_booked`.
+		add_action( 'epic_vtp_shipment_booked', array( $this, 'trigger' ), 10, 3 );
 		add_action( 'epic_ghn_shipment_booked', array( $this, 'trigger' ), 10, 3 );
 
 		parent::__construct();
@@ -70,9 +73,9 @@ class Epic_Email_Order_Shipped extends WC_Email {
 	}
 
 	/**
-	 * @param WC_Order|int $order          Order object (both current call sites in epic-ghn-shipping have one in hand) or an order ID.
-	 * @param string       $tracking_code  GHN order_code returned by create_shipment().
-	 * @param string       $eta            GHN's expected_delivery_time, if any.
+	 * @param WC_Order|int $order          Order object or an order ID.
+	 * @param string       $tracking_code  ViettelPost waybill returned by the booking plugin.
+	 * @param string       $eta            ViettelPost's expected delivery, if any.
 	 */
 	public function trigger( $order, $tracking_code, $eta = '' ) {
 		$this->setup_locale();
@@ -111,10 +114,13 @@ class Epic_Email_Order_Shipped extends WC_Email {
 
 		// Best-effort — only used to show a COD-due amount in the email.
 		// Guarded rather than a hard dependency (see class docblock): this
-		// action only ever fires from epic-ghn-shipping in practice, so the
+		// action only ever fires from the shipping plugin in practice, so the
 		// class will really be there, but nothing about *this* class should
 		// fatal if it somehow isn't.
-		if ( class_exists( 'Epic_GHN_Client' ) && method_exists( 'Epic_GHN_Client', 'is_cod_order' ) ) {
+		if ( class_exists( 'Epic_VTP_Client' ) && method_exists( 'Epic_VTP_Client', 'is_cod_order' ) ) {
+			$this->is_cod     = Epic_VTP_Client::is_cod_order( $order );
+			$this->cod_amount = $this->is_cod ? (float) $order->get_total() : 0;
+		} elseif ( class_exists( 'Epic_GHN_Client' ) && method_exists( 'Epic_GHN_Client', 'is_cod_order' ) ) {
 			$this->is_cod     = Epic_GHN_Client::is_cod_order( $order );
 			$this->cod_amount = $this->is_cod ? (float) $order->get_total() : 0;
 		}

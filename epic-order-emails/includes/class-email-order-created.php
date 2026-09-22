@@ -49,7 +49,7 @@ class Epic_Email_Order_Created extends WC_Email {
 		// Same two transitions WooCommerce's own "order received" emails use
 		// — either one means "the order now exists and the customer should
 		// hear about it," regardless of whether it'll be COD (on-hold is
-		// what epic-ghn-shipping's website-side flagging uses when GHN
+		// what epic-viettelpost-shipping's website-side flagging uses when ViettelPost
 		// booking fails at checkout — see website/src/lib/woocommerce.ts
 		// flagOrderForManualShipping()) or already paid (processing).
 		add_action( 'woocommerce_order_status_pending_to_processing_notification', array( $this, 'trigger' ), 10, 2 );

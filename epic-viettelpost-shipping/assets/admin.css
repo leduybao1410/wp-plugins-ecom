@@ -1,0 +1,146 @@
+/* EPIC ViettelPost Shipping — admin styles */
+
+.epic-vtp-address-group {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: flex-start;
+	margin-bottom: 8px;
+}
+
+.epic-vtp-address-group .epic-vtp-select {
+	min-width: 220px;
+}
+
+.epic-vtp-combo-wrap {
+	position: relative;
+	display: inline-block;
+	min-width: 220px;
+}
+
+.epic-vtp-combo {
+	width: 100%;
+}
+
+.epic-vtp-combo-suggestions {
+	position: absolute;
+	z-index: 1000;
+	top: 100%;
+	left: 0;
+	right: 0;
+	max-height: 240px;
+	overflow-y: auto;
+	margin: 2px 0 0;
+	padding: 0;
+	list-style: none;
+	background: #fff;
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	box-shadow: 0 2px 6px rgba( 0, 0, 0, 0.15 );
+}
+
+.epic-vtp-combo-suggestions li {
+	padding: 6px 10px;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.epic-vtp-combo-suggestions li:hover {
+	background: #2271b1;
+	color: #fff;
+}
+
+/* Status chips */
+.epic-vtp-shipment-cell,
+.epic-vtp-cod-chip {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 10px;
+	font-size: 12px;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.epic-vtp-status-none {
+	color: #8c8f94;
+}
+
+.epic-vtp-status-created,
+.epic-vtp-status-unknown {
+	background: #f0f0f1;
+	color: #3c434a;
+}
+
+.epic-vtp-status-pending {
+	background: #fcf9e8;
+	color: #7a5c00;
+}
+
+.epic-vtp-status-delivering {
+	background: #e5f5fa;
+	color: #0a4b78;
+}
+
+.epic-vtp-status-done {
+	background: #edfaef;
+	color: #1e6b2f;
+}
+
+.epic-vtp-status-cancelled {
+	background: #f6f7f7;
+	color: #8c8f94;
+}
+
+.epic-vtp-status-issue {
+	background: #fef1f1;
+	color: #8a1f11;
+}
+
+.epic-vtp-status-returning {
+	background: #fdf3ea;
+	color: #8a4b00;
+}
+
+.epic-vtp-status-returned {
+	background: #f4f0fa;
+	color: #5b2c8a;
+}
+
+.epic-vtp-cod-yes {
+	background: #fdf3ea;
+	color: #8a4b00;
+}
+
+.epic-vtp-cod-no {
+	background: #edfaef;
+	color: #1e6b2f;
+}
+
+/* Meta box */
+.epic-vtp-metabox .epic-vtp-actions {
+	margin: 6px 0;
+}
+
+.epic-vtp-feedback {
+	min-height: 18px;
+	font-size: 12px;
+	margin-top: 4px;
+}
+
+.epic-vtp-feedback.epic-vtp-error {
+	color: #b32d2e;
+}
+
+.epic-vtp-feedback.epic-vtp-ok,
+.epic-vtp-resolved .epic-vtp-ok {
+	color: #1e6b2f;
+}
+
+.epic-vtp-last-synced {
+	color: #646970;
+}
+
+.epic-vtp-danger {
+	color: #b32d2e;
+	border-color: #b32d2e;
+}
