@@ -4,7 +4,7 @@ Every article must include at least one real photo of EPIC's own roastery, café
 
 ## How to pick the image for a given post
 
-Each pillar has its own small pool of images (below). Given the `subtopic_index` (0-9) computed in SKILL.md's rotation logic, pick `image_index = subtopic_index % pool_size` from that pillar's pool — this cycles through the pool so the same 10 posts for a pillar don't all reuse the exact same photo, without requiring a separate state file.
+Each pillar has its own small pool of images (below). Choose a real photo that directly fits the selected article angle, and consider recent use so consecutive posts do not repeat the same image unnecessarily. Topic selection is Search Console-led; there is no rotation index.
 
 | Pillar | Category | Image pool (WP media id → filename → suggested alt text) |
 |---|---|---|
@@ -16,6 +16,8 @@ Each pillar has its own small pool of images (below). Given the `subtopic_index`
 | 5 — Tư Vấn & Sửa Chữa Máy Móc | 89 | 213 espresso-machine.jpg "Máy pha espresso tại quán cà phê" · 214 banner1-essential-setup.jpg "Thiết bị pha chế cần thiết cho quán cà phê" · 215 banner3-precision-care.jpg "Bảo trì máy pha cà phê chính xác" |
 
 All images live at `https://admin.epicroastery.coffee/wp-content/uploads/2026/08/<filename>` (media id resolves to that URL too via `GET /wp-json/wp/v2/media/<id>`, use that if the upload path ever changes).
+
+**Quote style matters:** the inline `<img>` must use **double quotes** on `src`/`alt`/`style` (e.g. `src="…"`). `website/src/lib/news.ts`'s `firstImageSrc()` extracts the list/card image with `/<img[^>]+src="([^"]+)"/`, so a single-quoted `src='…'` is silently invisible on the frontend (the post then shows no thumbnail even though the image exists in the body). Don't hand-write bodies with single-quoted attributes just to make JSON escaping easier.
 
 ## How to embed it
 

@@ -28,7 +28,15 @@ class Epic_VTP_Client {
 	/** Domestic price list — the only TYPE this plugin uses. */
 	const PRICE_TYPE_DOMESTIC = 1;
 
-	/** ORDER_PAYMENT codes (who the courier collects from, and for what). */
+	/**
+	 * ORDER_PAYMENT codes (who the courier collects from, and for what).
+	 *
+	 * COD bookings use GOODS_ONLY (3), not GOODS_AND_FEE (2): this plugin
+	 * sends MONEY_COLLECTION = the full WooCommerce order total, which already
+	 * includes the shipping fee, so letting ViettelPost also add its own fee
+	 * (2) would collect shipping twice. With 3 ViettelPost bills its fee to
+	 * the sender and nets it out of the COD remittance instead.
+	 */
 	const ORDER_PAYMENT_NONE            = 1; // Không thu hộ.
 	const ORDER_PAYMENT_GOODS_AND_FEE   = 2; // Thu hộ tiền hàng + tiền cước.
 	const ORDER_PAYMENT_GOODS_ONLY      = 3; // Thu hộ tiền hàng.
@@ -68,6 +76,12 @@ class Epic_VTP_Client {
 			'default_height_cm'     => get_option( 'epic_vtp_default_height_cm', 10 ),
 			'default_item_weight_g' => get_option( 'epic_vtp_default_item_weight_g', 250 ),
 			'webhook_secret'        => trim( (string) get_option( 'epic_vtp_webhook_secret', '' ) ),
+			'auto_complete'         => get_option( 'epic_vtp_auto_complete', 'no' ),
+			'hold_on_failure'       => get_option( 'epic_vtp_hold_on_failure', 'no' ),
+			'return_hold'           => get_option( 'epic_vtp_return_hold', 'no' ),
+			'label_size'            => (string) get_option( 'epic_vtp_label_size', '1' ),
+			'label_show_postage'    => get_option( 'epic_vtp_label_show_postage', 'yes' ),
+			'stale_days'            => (int) get_option( 'epic_vtp_stale_days', 7 ),
 		);
 	}
 
@@ -76,6 +90,48 @@ class Epic_VTP_Client {
 		return 'sandbox' === $settings['environment']
 			? 'https://partnerdev.viettelpost.vn'
 			: 'https://partner.viettelpost.vn';
+	}
+
+	/**
+	 * Builds the free-text sender address the NLP endpoints
+	 * (/getPriceAllNlp, /createOrderNlp) expect.
+	 *
+	 * The settings screen stores the pickup address as street text plus a
+	 * separately-picked province/ward, but those NLP endpoints take ONE
+	 * free-text address string. Sending the street text alone leaves
+	 * ViettelPost unable to geocode the origin, which it reports as
+	 * "Price does not apply to this itinerary!" — even when the receiver
+	 * address is perfectly valid. Compose all three parts here, skipping any
+	 * part already present in the street text so an admin who pasted the full
+	 * address isn't duplicated.
+	 *
+	 * @return string e.g. "54/21 Ao Đôi, Bình Trị Đông, Thành phố Hồ Chí Minh"
+	 */
+	private static function sender_nlp_address( array $settings ) {
+		$parts = array();
+		foreach ( array( 'from_address', 'from_ward_name', 'from_province_name' ) as $key ) {
+			$part = trim( (string) $settings[ $key ] );
+			if ( '' !== $part ) {
+				$parts[] = $part;
+			}
+		}
+
+		$address = '';
+		foreach ( $parts as $part ) {
+			if ( '' === $address ) {
+				$address = $part;
+				continue;
+			}
+			$already_present = function_exists( 'mb_stripos' )
+				? ( false !== mb_stripos( $address, $part ) )
+				: ( false !== stripos( $address, $part ) );
+			if ( $already_present ) {
+				continue;
+			}
+			$address .= ', ' . $part;
+		}
+
+		return $address;
 	}
 
 	public static function is_configured() {
@@ -137,14 +193,17 @@ class Epic_VTP_Client {
 	/**
 	 * Buckets a raw ViettelPost numeric order status into the small set of
 	 * staff-facing stages the Orders list "Shipment" column acts on. See
-	 * self::status_label() for the full 24-code vocabulary.
+	 * self::status_label() for the full 23-code vocabulary.
 	 *
 	 * @return array { label: string, css_class: string, raw: string }
 	 */
-	public static function bucket_status( $raw_status ) {
-		$raw_status = (string) $raw_status;
-
-		$buckets = array(
+	/**
+	 * Staff-facing stage buckets, key => raw ORDER_STATUS codes.
+	 *
+	 * @return array<string,string[]>
+	 */
+	public static function status_buckets() {
+		return array(
 			'created'    => array( '', '102' ),
 			'pending'    => array( '103', '104', '105', '200', '202' ),
 			'delivering' => array( '300', '400', '500', '508', '509', '550' ),
@@ -154,8 +213,11 @@ class Epic_VTP_Client {
 			'returning'  => array( '502', '505', '515' ),
 			'returned'   => array( '504' ),
 		);
+	}
 
-		$labels = array(
+	/** @return array<string,string> Bucket key => label. */
+	public static function bucket_labels() {
+		return array(
 			'created'    => __( 'Created', 'epic-viettelpost-shipping' ),
 			'pending'    => __( 'Pending pickup', 'epic-viettelpost-shipping' ),
 			'delivering' => __( 'Delivering', 'epic-viettelpost-shipping' ),
@@ -165,6 +227,12 @@ class Epic_VTP_Client {
 			'returning'  => __( 'Returning', 'epic-viettelpost-shipping' ),
 			'returned'   => __( 'Returned', 'epic-viettelpost-shipping' ),
 		);
+	}
+
+	public static function bucket_status( $raw_status ) {
+		$raw_status = (string) $raw_status;
+		$buckets    = self::status_buckets();
+		$labels     = self::bucket_labels();
 
 		foreach ( $buckets as $key => $codes ) {
 			if ( in_array( $raw_status, $codes, true ) ) {
@@ -184,15 +252,28 @@ class Epic_VTP_Client {
 	}
 
 	/**
-	 * Human-readable label for a numeric ViettelPost ORDER_STATUS code.
-	 * Codes 101..550 map to the 24 documented statuses; an empty/unknown code
-	 * is shown as "Created" (the shipment exists and nothing has happened
-	 * yet) or the raw code respectively.
+	 * Whether a status is a return or delivery-issue outcome that needs staff
+	 * action (restock/refund): returning (502/505/515), returned (504),
+	 * delivery issue (506/507/509), and cancellation at the customer's ask
+	 * (503).
 	 */
-	public static function status_label( $code ) {
-		$code = (string) $code;
+	public static function is_return_or_issue( $status ) {
+		return in_array(
+			(string) $status,
+			array( '502', '503', '504', '505', '506', '507', '509', '515' ),
+			true
+		);
+	}
 
-		$map = array(
+	/**
+	 * The full numeric ORDER_STATUS vocabulary, code => human label. Exposed
+	 * so the manual status override UI can build its dropdown from the same
+	 * source status_label() renders from.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function status_map() {
+		return array(
 			'101' => __( 'ViettelPost requested cancellation', 'epic-viettelpost-shipping' ),
 			'102' => __( 'Awaiting processing', 'epic-viettelpost-shipping' ),
 			'103' => __( 'Handed to post office', 'epic-viettelpost-shipping' ),
@@ -217,10 +298,22 @@ class Epic_VTP_Client {
 			'515' => __( 'Return approved', 'epic-viettelpost-shipping' ),
 			'550' => __( 'Redelivery requested by customer', 'epic-viettelpost-shipping' ),
 		);
+	}
+
+	/**
+	 * Human-readable label for a numeric ViettelPost ORDER_STATUS code.
+	 * Codes 101..550 map to the 23 documented statuses; an empty/unknown code
+	 * is shown as "Created" (the shipment exists and nothing has happened
+	 * yet) or the raw code respectively.
+	 */
+	public static function status_label( $code ) {
+		$code = (string) $code;
 
 		if ( '' === $code ) {
 			return __( 'Created', 'epic-viettelpost-shipping' );
 		}
+
+		$map = self::status_map();
 
 		return isset( $map[ $code ] ) ? $map[ $code ] : sprintf(
 			/* translators: %s: raw numeric status code */
@@ -528,7 +621,7 @@ class Epic_VTP_Client {
 				'/v2/order/getPriceAllNlp',
 				'POST',
 				array(
-					'SENDER_ADDRESS'   => ! empty( $args['sender_address'] ) ? $args['sender_address'] : (string) $settings['from_address'],
+					'SENDER_ADDRESS'   => ! empty( $args['sender_address'] ) ? $args['sender_address'] : self::sender_nlp_address( $settings ),
 					'RECEIVER_ADDRESS' => (string) $args['receiver_address'],
 					'RECEIVER_PROVINCE' => (int) $args['receiver_province_id'],
 					'PRODUCT_TYPE'     => ! empty( $args['product_type'] ) ? $args['product_type'] : self::PRODUCT_TYPE_GOODS,
@@ -684,7 +777,7 @@ class Epic_VTP_Client {
 		$body = array(
 			'ORDER_NUMBER'      => (string) $args['order_number'],
 			'SENDER_FULLNAME'   => $settings['from_name'],
-			'SENDER_ADDRESS'    => $settings['from_address'],
+			'SENDER_ADDRESS'    => self::sender_nlp_address( $settings ),
 			'SENDER_PHONE'      => $settings['from_phone'],
 			'RECEIVER_FULLNAME' => $args['to_name'],
 			'RECEIVER_ADDRESS'  => $args['to_address'],
@@ -737,9 +830,36 @@ class Epic_VTP_Client {
 		);
 	}
 
-	/** Cancels a shipment (only valid while ORDER_STATUS < 200). */
+	/**
+	 * Cancels a shipment (only valid while ORDER_STATUS < 200).
+	 *
+	 * ViettelPost intermittently rejects a cancel made seconds after
+	 * createOrderNlp with "Đơn hàng không tồn tại hoặc trạng thái đã bị thay
+	 * đổi" while the new order's status settles — the identical call succeeds
+	 * moments later. So a transient rejection is retried once after a short
+	 * pause; a genuine "already cancelled/too late" then comes back on the
+	 * second attempt.
+	 */
 	public static function cancel_order( $order_number, $note = '' ) {
-		return self::update_status( $order_number, self::UPDATE_CANCEL, $note );
+		$result = self::update_status( $order_number, self::UPDATE_CANCEL, $note );
+
+		if ( is_wp_error( $result ) && self::is_transient_cancel_error( $result ) ) {
+			sleep( 3 );
+			$result = self::update_status( $order_number, self::UPDATE_CANCEL, $note );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Whether a cancel WP_Error is VTP's transient "just created, status not
+	 * settled yet" rejection rather than a permanent failure. Diacritics and
+	 * case are stripped so the match survives encoding variations.
+	 */
+	private static function is_transient_cancel_error( WP_Error $error ) {
+		$message = strtolower( remove_accents( (string) $error->get_error_message() ) );
+		return false !== strpos( $message, 'khong ton tai' )
+			|| false !== strpos( $message, 'trang thai da bi thay doi' );
 	}
 
 	/**
@@ -775,11 +895,12 @@ class Epic_VTP_Client {
 	}
 
 	/**
-	 * @param string $token Print token from gen_print_token().
-	 * @param string $type  Label type: '1' (A5), '2' (A6), 'a6_1', '100' (A7), '1001'.
+	 * @param string $token         Print token from gen_print_token().
+	 * @param string $type          Label type: '1' (A5), '2' (A6), 'a6_1', '100' (A7), '1001'.
+	 * @param bool   $show_postage  Whether to print the shipping fee on the label.
 	 */
-	public static function print_url( $token, $type = '1' ) {
-		return 'https://digitalize.viettelpost.vn/DigitalizePrint/report.do?type=' . rawurlencode( $type ) . '&bill=' . rawurlencode( $token ) . '&showPostage=1';
+	public static function print_url( $token, $type = '1', $show_postage = true ) {
+		return 'https://digitalize.viettelpost.vn/DigitalizePrint/report.do?type=' . rawurlencode( $type ) . '&bill=' . rawurlencode( $token ) . '&showPostage=' . ( $show_postage ? '1' : '0' );
 	}
 
 	/** Lists the account's pickup warehouses — GET /v2/user/listInventory. */

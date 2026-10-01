@@ -144,3 +144,64 @@
 	color: #b32d2e;
 	border-color: #b32d2e;
 }
+
+/* Manual status control */
+.epic-vtp-manual-status {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+/* Shipments dashboard */
+.epic-vtp-dashboard .epic-vtp-filters {
+	margin: 12px 0;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.epic-vtp-dashboard .epic-vtp-bulkbar {
+	margin: 8px 0;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.epic-vtp-shipments .epic-vtp-delta-loss {
+	color: #b32d2e;
+	font-weight: 600;
+}
+
+.epic-vtp-shipments .epic-vtp-delta-gain {
+	color: #1e6b2f;
+	font-weight: 600;
+}
+
+.epic-vtp-delta-ok {
+	color: #8c8f94;
+}
+
+.epic-vtp-badge {
+	display: inline-block;
+	margin-left: 4px;
+	padding: 1px 6px;
+	border-radius: 8px;
+	font-size: 11px;
+	vertical-align: middle;
+}
+
+.epic-vtp-badge-stale {
+	background: #fcf9e8;
+	color: #7a5c00;
+}
+
+.epic-vtp-badge-action {
+	background: #fef1f1;
+	color: #8a1f11;
+}
+
+.epic-vtp-pagination {
+	margin: 12px 0;
+}

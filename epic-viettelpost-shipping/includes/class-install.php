@@ -43,6 +43,12 @@ class Epic_VTP_Install {
 			'epic_vtp_default_item_weight_g' => 250,
 			'epic_vtp_webhook_secret'        => '',
 			'epic_vtp_free_shipping_min_subtotal' => 500000,
+			'epic_vtp_auto_complete'         => 'no',
+			'epic_vtp_hold_on_failure'       => 'no',
+			'epic_vtp_return_hold'           => 'no',
+			'epic_vtp_label_size'            => '1',
+			'epic_vtp_label_show_postage'    => 'yes',
+			'epic_vtp_stale_days'            => 7,
 		);
 
 		foreach ( $defaults as $option => $value ) {

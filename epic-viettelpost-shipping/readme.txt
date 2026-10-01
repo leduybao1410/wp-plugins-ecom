@@ -4,7 +4,7 @@ Tags: woocommerce, viettelpost, shipping, cod, vietnam
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 0.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,48 @@ Log in at viettelpost.vn → Cấu hình tài khoản → Thêm mới token and 
 generated token. Sandbox and production tokens are different.
 
 == Changelog ==
+
+= 0.1.6 =
+* Feature: "ViettelPost Shipments" dashboard (WooCommerce submenu) — list
+  every booked shipment with status/date filters, search, "needs action" and
+  "stale" badges, COD, quoted-vs-actual courier fee, bulk label printing, and
+  CSV export.
+* Feature: bulk "Print ViettelPost labels" action on the Orders list.
+* Feature: label size (A5/A6/A7) and show/hide-postage settings.
+* Feature: one-click cancel retry — a transient "status already changed"
+  rejection right after booking is retried once automatically.
+* Feature: manual "Set status" control on the order (ViettelPost exposes no
+  status-query API, so this is the fallback when a webhook is missed).
+* Feature: opt-in settings to complete the order on delivery, hold it on a
+  failed booking, and hold/flag it on a return or delivery issue.
+* Feature: daily stale-shipment scan flags in-flight shipments with no
+  webhook update within the configured window.
+* Fix: webhook now ignores out-of-order (older) status callbacks instead of
+  regressing the shipment status.
+* Fix: booking takes a per-order lock so a double-click can't create two
+  shipments.
+* New action: `epic_vtp_status_changed( $order, $status, $source )` fired on
+  every applied status change (used by epic-order-emails for the new
+  "delivered" email).
+
+= 0.1.5 =
+* Change: the COD amount collected at delivery is now the full WooCommerce
+  order total (goods + the shipping fee already in the order price), so the
+  amount charged matches the total the customer was shown at checkout.
+  ViettelPost's own shipping fee is now billed to the sender instead of added
+  on top of the collection (ORDER_PAYMENT 2 → 3); the sender receives the
+  order total minus ViettelPost's fee. This also fixes free-shipping COD
+  orders, which previously had the courier's fee collected from the recipient.
+* Fix: the webhook's waybill lookup no longer uses `meta_query` on the legacy
+  (non-HPOS) order datastore, which WooCommerce 9.2+ logs as unsupported and
+  may stop honoring. HPOS stores keep the `meta_query` lookup; legacy stores
+  now query the order postmeta directly. Found by an e2e test on a non-HPOS
+  store.
+
+= 0.1.4 =
+* Fix: compose the pickup address (street + ward + province) for the
+  address-detail (NLP) fee/booking calls. Sending the street text alone made
+  ViettelPost return "Price does not apply to this itinerary!".
 
 = 0.1.0 =
 * Initial release: settings, single-order booking/cancel/print, orders-list

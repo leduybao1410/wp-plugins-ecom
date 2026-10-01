@@ -86,7 +86,9 @@ class Epic_GHN_Order_Meta_Box {
 			return;
 		}
 
-		wp_nonce_field( 'epic_ghn_order_action', 'epic_ghn_order_nonce' );
+		// No inline nonce here: every action in this box is sent over AJAX with
+		// the `epic_ghn_admin` nonce issued via wp_localize_script (class-assets.php)
+		// and verified by Epic_Ghn_Ajax::verify_request().
 		echo '<div class="epic-ghn-metabox" data-order-id="' . esc_attr( $order->get_id() ) . '">';
 
 		/**

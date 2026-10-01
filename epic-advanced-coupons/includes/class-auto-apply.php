@@ -38,11 +38,30 @@ class Epic_Adv_Coupons_Auto_Apply {
 	}
 
 	public static function mark_user_removed() {
-		if ( empty( $_POST['coupon'] ) || ! function_exists( 'WC' ) || ! WC()->session ) {
+		if ( ! function_exists( 'WC' ) || ! WC()->session || ! WC()->cart ) {
 			return;
 		}
-		$code     = wc_format_coupon_code( wp_unslash( $_POST['coupon'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- read-only lookup, WC's own handler verifies the nonce for the actual removal.
-		$removed  = (array) WC()->session->get( self::SESSION_REMOVED, array() );
+
+		$code = isset( $_POST['coupon'] ) ? wc_format_coupon_code( wp_unslash( $_POST['coupon'] ) ) : '';
+		if ( '' === $code || strlen( $code ) > 50 ) {
+			return;
+		}
+
+		// Require WooCommerce's own remove-coupon nonce so a cross-site request
+		// cannot silently suppress auto-apply (and so arbitrary keys can't be
+		// written into the session).
+		$nonce = isset( $_POST['security'] ) ? sanitize_text_field( wp_unslash( $_POST['security'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'apply-coupon' ) && ! wp_verify_nonce( $nonce, 'woocommerce-cart' ) ) {
+			return;
+		}
+
+		// Only record a removal for a coupon that is actually applied.
+		$applied = array_map( 'wc_format_coupon_code', WC()->cart->get_applied_coupons() );
+		if ( ! in_array( $code, $applied, true ) ) {
+			return;
+		}
+
+		$removed          = (array) WC()->session->get( self::SESSION_REMOVED, array() );
 		$removed[ $code ] = true;
 		WC()->session->set( self::SESSION_REMOVED, $removed );
 	}

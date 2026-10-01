@@ -44,7 +44,7 @@ class Epic_Zalo_Settings {
 			self::OPTION_SECRET_KEY,
 			array(
 				'type'              => 'string',
-				'sanitize_callback' => 'sanitize_text_field',
+				'sanitize_callback' => array( __CLASS__, 'sanitize_secret_key' ),
 				'default'           => '',
 			)
 		);
@@ -65,6 +65,12 @@ class Epic_Zalo_Settings {
 
 	public static function get_secret_key() {
 		return get_option( self::OPTION_SECRET_KEY, '' );
+	}
+
+	/** Empty POST keeps the saved secret (the field renders blank). */
+	public static function sanitize_secret_key( $value ) {
+		$value = sanitize_text_field( (string) $value );
+		return '' === $value ? self::get_secret_key() : $value;
 	}
 
 	public static function get_auto_create_users() {
@@ -118,14 +124,23 @@ class Epic_Zalo_Settings {
 							<label for="<?php echo esc_attr( self::OPTION_SECRET_KEY ); ?>"><?php esc_html_e( 'App Secret Key', 'epic-zalo-login' ); ?></label>
 						</th>
 						<td>
+							<?php $secret_is_set = '' !== self::get_secret_key(); ?>
 							<input
 								type="password"
 								id="<?php echo esc_attr( self::OPTION_SECRET_KEY ); ?>"
 								name="<?php echo esc_attr( self::OPTION_SECRET_KEY ); ?>"
-								value="<?php echo esc_attr( self::get_secret_key() ); ?>"
+								value=""
+								placeholder="<?php echo esc_attr( $secret_is_set ? '••••••••••' : '' ); ?>"
 								class="regular-text code"
-								autocomplete="off"
+								autocomplete="new-password"
 							/>
+							<p class="description">
+								<?php if ( $secret_is_set ) : ?>
+									<?php esc_html_e( 'A secret is saved. Leave blank to keep it, or paste a new value to replace it.', 'epic-zalo-login' ); ?>
+								<?php else : ?>
+									<?php esc_html_e( 'Paste the App Secret Key from the Zalo app settings.', 'epic-zalo-login' ); ?>
+								<?php endif; ?>
+							</p>
 						</td>
 					</tr>
 					<tr>

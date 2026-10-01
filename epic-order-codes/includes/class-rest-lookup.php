@@ -64,6 +64,10 @@ class Epic_Order_Code_Lookup {
 	}
 
 	public static function lookup( \WP_REST_Request $request ) {
+		if ( self::is_rate_limited() ) {
+			return new \WP_Error( 'epic_order_codes_rate_limited', 'Too many lookups. Please try again shortly.', array( 'status' => 429 ) );
+		}
+
 		$code = (string) $request->get_param( 'code' );
 
 		$order_id = Epic_Order_Code::decode( $code );
@@ -108,5 +112,18 @@ class Epic_Order_Code_Lookup {
 
 	private static function not_found() {
 		return new \WP_REST_Response( array( 'found' => false ), 404 );
+	}
+
+	/**
+	 * Simple fixed-window per-IP throttle (30 lookups/minute) so the order-code
+	 * space cannot be probed at speed even if the shared secret leaks.
+	 */
+	private static function is_rate_limited() {
+		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
+		$key = 'epic_oc_lookup_' . md5( $ip . '|' . (int) floor( time() / MINUTE_IN_SECONDS ) );
+		$n   = (int) get_transient( $key );
+		$n++;
+		set_transient( $key, $n, MINUTE_IN_SECONDS );
+		return $n > 30;
 	}
 }

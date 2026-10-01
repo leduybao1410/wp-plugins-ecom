@@ -66,6 +66,26 @@ done
 : "${TITLE_EN:?Set --title-en}"
 : "${CONTENT_FILE_EN:?Set --content-file-en}"
 
+# Confine content files to a base directory so a prompt-injected path cannot
+# exfiltrate arbitrary local files (e.g. ../../website/.env) into a post body.
+# Override the base with CONTENT_BASE_DIR when needed.
+resolve_content_file() {
+  local f="$1" real base
+  if [[ ! -f "$f" ]]; then
+    echo "ERROR: content file not found: $f" >&2
+    exit 1
+  fi
+  real="$(cd "$(dirname "$f")" && pwd)/$(basename "$f")"
+  base="$(cd "${CONTENT_BASE_DIR:-$PWD}" && pwd)"
+  if [[ "$real" != "$base"/* ]]; then
+    echo "ERROR: content file must be inside $base (got $real). Set CONTENT_BASE_DIR to allow another directory." >&2
+    exit 1
+  fi
+  printf '%s' "$real"
+}
+CONTENT_FILE_VI="$(resolve_content_file "$CONTENT_FILE_VI")"
+CONTENT_FILE_EN="$(resolve_content_file "$CONTENT_FILE_EN")"
+
 # Auth: prefer an Application Password over HTTP Basic (WP_APP_PASSWORD); fall
 # back to the account login password via JWT (WP_PASSWORD) when no app password
 # is configured. WordPress only accepts Application Passwords over Basic Auth,
@@ -89,7 +109,13 @@ sys.stdout.write(raw[m.start():] if m else raw)
 }
 
 if [[ -n "${WP_APP_PASSWORD:-}" ]]; then
-  AUTH=(-u "${WP_USER}:${WP_APP_PASSWORD}")
+  # Pass Basic Auth via a 0600 curl config file so the password never appears
+  # in the process table (argv) or shell history.
+  AUTH_CONFIG="$(mktemp)"
+  chmod 600 "$AUTH_CONFIG"
+  printf 'user = "%s:%s"\n' "$WP_USER" "$WP_APP_PASSWORD" > "$AUTH_CONFIG"
+  trap 'rm -f "$AUTH_CONFIG"' EXIT
+  AUTH=(--config "$AUTH_CONFIG")
 else
   TOKEN=$(curl -s -X POST "$WC_URL/wp-json/jwt-auth/v1/token" \
     --data-urlencode "username=${WP_USER}" \

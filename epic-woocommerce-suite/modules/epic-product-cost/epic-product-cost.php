@@ -29,7 +29,7 @@ define( 'EPIC_PRODUCT_COST_VERSION', '1.1.0' );
 define( 'EPIC_PRODUCT_COST_PLUGIN_FILE', __FILE__ );
 define( 'EPIC_PRODUCT_COST_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_PRODUCT_COST_URL', plugin_dir_url( __FILE__ ) );
-define( 'EPIC_PRODUCT_COST_CAP', 'manage_woocommerce' );
+define( 'EPIC_PRODUCT_COST_CAP', 'manage_product_cost' );
 
 /**
  * Declare HPOS compatibility — same boilerplate as every other EPIC plugin. This plugin only reads
@@ -79,8 +79,22 @@ add_action( 'plugins_loaded', 'epic_product_cost_init' );
 function epic_product_cost_activate() {
 	require_once EPIC_PRODUCT_COST_DIR . 'includes/class-store.php';
 	Epic_Product_Cost_Store::install();
+	epic_product_cost_ensure_caps();
 }
 register_activation_hook( __FILE__, 'epic_product_cost_activate' );
+
+/**
+ * Grant the dedicated cost capability to administrators (idempotent, also runs
+ * on upgrade). Shop managers are intentionally NOT granted it by default —
+ * grant the `manage_product_cost` capability to a role explicitly to allow it.
+ */
+function epic_product_cost_ensure_caps() {
+	$role = get_role( 'administrator' );
+	if ( $role && ! $role->has_cap( EPIC_PRODUCT_COST_CAP ) ) {
+		$role->add_cap( EPIC_PRODUCT_COST_CAP );
+	}
+}
+add_action( 'admin_init', 'epic_product_cost_ensure_caps' );
 
 /**
  * Thin, always-loaded facade other EPIC plugins can call without a hard dependency:

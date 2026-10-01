@@ -419,11 +419,29 @@ class Epic_Adv_Coupons_Rest_Quote {
 			if ( ! is_array( $entry ) || empty( $entry['product_id'] ) || empty( $entry['quantity'] ) ) {
 				continue;
 			}
+			$product_id   = (int) $entry['product_id'];
+			$variation_id = (int) ( $entry['variation_id'] ?? 0 );
+			$submitted    = max( 0.0, (float) ( $entry['unit_price'] ?? 0 ) );
+
+			// Never price the quote above the catalog price for the product —
+			// otherwise a caller could inflate unit_price and obtain an
+			// arbitrarily large percentage / Buy-X-Get-Y discount. A lower
+			// (e.g. negotiated wholesale) price is still allowed.
+			$catalog   = 0.0;
+			$product   = $variation_id ? wc_get_product( $variation_id ) : wc_get_product( $product_id );
+			if ( $product ) {
+				$catalog = (float) $product->get_price();
+			}
+			$unit_price = $submitted;
+			if ( $catalog > 0 && $submitted > $catalog ) {
+				$unit_price = $catalog;
+			}
+
 			$items[] = array(
-				'product_id'   => (int) $entry['product_id'],
-				'variation_id' => (int) ( $entry['variation_id'] ?? 0 ),
+				'product_id'   => $product_id,
+				'variation_id' => $variation_id,
 				'quantity'     => max( 1, (int) $entry['quantity'] ),
-				'unit_price'   => max( 0.0, (float) ( $entry['unit_price'] ?? 0 ) ),
+				'unit_price'   => $unit_price,
 			);
 		}
 		return $items;

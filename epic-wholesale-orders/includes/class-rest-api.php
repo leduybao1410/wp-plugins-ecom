@@ -79,7 +79,78 @@ class Epic_Wholesale_Orders_Rest_Api {
 		if ( empty( $provided ) || ! hash_equals( $configured, $provided ) ) {
 			return new \WP_Error( 'epic_wholesale_orders_forbidden', 'Invalid or missing X-Epic-Secret header.', array( 'status' => 403 ) );
 		}
+
+		// When an identity secret is configured, a valid per-request assertion
+		// is mandatory — the shared secret alone no longer proves *whose*
+		// account the request is for.
+		if ( '' !== self::identity_secret() && null === self::identity( $request ) ) {
+			return new \WP_Error( 'epic_wholesale_orders_identity_required', 'A valid X-Epic-Identity assertion is required.', array( 'status' => 403 ) );
+		}
+
 		return true;
+	}
+
+	/** Secret used to verify the X-Epic-Identity assertion (constant or option). */
+	private static function identity_secret() {
+		if ( defined( 'EPIC_IDENTITY_SECRET' ) && EPIC_IDENTITY_SECRET ) {
+			return (string) EPIC_IDENTITY_SECRET;
+		}
+		return (string) get_option( 'epic_identity_secret', '' );
+	}
+
+	/**
+	 * Verify and decode the signed identity assertion.
+	 *
+	 * @return array{sub:string,email:string}|null
+	 */
+	private static function identity( \WP_REST_Request $request ) {
+		$secret = self::identity_secret();
+		if ( '' === $secret ) {
+			return null;
+		}
+		$assertion = (string) $request->get_header( 'x-epic-identity' );
+		if ( '' === $assertion || false === strpos( $assertion, '.' ) ) {
+			return null;
+		}
+		$parts    = explode( '.', $assertion, 2 );
+		$expected = hash_hmac( 'sha256', $parts[0], $secret );
+		if ( ! hash_equals( $expected, $parts[1] ) ) {
+			return null;
+		}
+		$json = json_decode( (string) base64_decode( strtr( $parts[0], '-_', '+/' ), true ), true );
+		if ( ! is_array( $json ) || ! isset( $json['sub'], $json['ts'] ) ) {
+			return null;
+		}
+		if ( abs( time() - (int) $json['ts'] ) > 300 ) {
+			return null;
+		}
+		return array(
+			'sub'   => sanitize_text_field( (string) $json['sub'] ),
+			'email' => isset( $json['email'] ) ? strtolower( sanitize_email( (string) $json['email'] ) ) : '',
+		);
+	}
+
+	/**
+	 * Resolve the request identity: the verified assertion wins over any
+	 * client-supplied google_sub/email.
+	 *
+	 * @return array{0:string,1:string}
+	 */
+	private static function resolved_identity( \WP_REST_Request $request ) {
+		$sub   = (string) $request->get_param( 'google_sub' );
+		$email = (string) $request->get_param( 'email' );
+
+		$asserted = self::identity( $request );
+		if ( $asserted ) {
+			if ( '' !== $asserted['sub'] ) {
+				$sub = $asserted['sub'];
+			}
+			if ( '' !== $asserted['email'] ) {
+				$email = $asserted['email'];
+			}
+		}
+
+		return array( $sub, $email );
 	}
 
 	/**
@@ -128,10 +199,8 @@ class Epic_Wholesale_Orders_Rest_Api {
 	// ------------------------------------------------------------------
 
 	public static function list_products( \WP_REST_Request $request ) {
-		$customer = self::resolve_customer(
-			(string) $request->get_param( 'google_sub' ),
-			(string) $request->get_param( 'email' )
-		);
+		list( $sub, $email ) = self::resolved_identity( $request );
+		$customer = self::resolve_customer( $sub, $email );
 		if ( ! $customer || ! Epic_Wholesale_Orders_Store::is_customer( $customer->ID ) ) {
 			return new \WP_Error( 'epic_wholesale_orders_not_whitelisted', 'This account is not a wholesale customer.', array( 'status' => 403 ) );
 		}
@@ -364,10 +433,8 @@ class Epic_Wholesale_Orders_Rest_Api {
 			return new \WP_Error( 'epic_wholesale_orders_bad_request', 'A JSON body is required.', array( 'status' => 400 ) );
 		}
 
-		$customer = self::resolve_customer(
-			isset( $params['google_sub'] ) ? sanitize_text_field( (string) $params['google_sub'] ) : '',
-			isset( $params['email'] ) ? sanitize_email( (string) $params['email'] ) : ''
-		);
+		list( $sub, $email ) = self::resolved_identity( $request );
+		$customer = self::resolve_customer( $sub, $email );
 		if ( ! $customer ) {
 			return new \WP_Error( 'epic_wholesale_orders_no_account', 'No account found for this session.', array( 'status' => 403 ) );
 		}
@@ -489,10 +556,8 @@ class Epic_Wholesale_Orders_Rest_Api {
 	// ------------------------------------------------------------------
 
 	public static function list_orders( \WP_REST_Request $request ) {
-		$customer = self::resolve_customer(
-			(string) $request->get_param( 'google_sub' ),
-			(string) $request->get_param( 'email' )
-		);
+		list( $sub, $email ) = self::resolved_identity( $request );
+		$customer = self::resolve_customer( $sub, $email );
 		if ( ! $customer ) {
 			return new \WP_Error( 'epic_wholesale_orders_no_account', 'No account found for this session.', array( 'status' => 403 ) );
 		}
@@ -512,10 +577,8 @@ class Epic_Wholesale_Orders_Rest_Api {
 	 * base64-encoded so the Next.js route handler can stream it to the browser.
 	 */
 	public static function get_invoice( \WP_REST_Request $request ) {
-		$customer = self::resolve_customer(
-			(string) $request->get_param( 'google_sub' ),
-			(string) $request->get_param( 'email' )
-		);
+		list( $sub, $email ) = self::resolved_identity( $request );
+		$customer = self::resolve_customer( $sub, $email );
 		if ( ! $customer ) {
 			return new \WP_Error( 'epic_wholesale_orders_no_account', 'No account found for this session.', array( 'status' => 403 ) );
 		}

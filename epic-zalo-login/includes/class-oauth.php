@@ -26,6 +26,55 @@ class Epic_Zalo_Oauth {
 	const VERIFIER_TRANSIENT = 'epic_zalo_verifier_';
 	const VERIFIER_TTL       = 10 * MINUTE_IN_SECONDS;
 
+	/** Browser-bound state cookie used to defeat login CSRF. */
+	const STATE_COOKIE = 'epic_zalo_state';
+
+	/**
+	 * Begin a login: bind the random `state` to this browser via an HttpOnly
+	 * cookie. A WordPress nonce is shared by all logged-out visitors and would
+	 * let an attacker replay their own callback into a victim's browser
+	 * (login CSRF / session fixation).
+	 *
+	 * @param string $state
+	 */
+	public static function start_state( $state ) {
+		self::set_state_cookie( $state, time() + self::VERIFIER_TTL );
+	}
+
+	/**
+	 * True when the callback's `state` matches the cookie set in this browser
+	 * and the matching PKCE verifier is still stored server-side. The cookie is
+	 * consumed (cleared) either way.
+	 *
+	 * @param string $state
+	 * @return bool
+	 */
+	public static function verify_state( $state ) {
+		$cookie = isset( $_COOKIE[ self::STATE_COOKIE ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ self::STATE_COOKIE ] ) ) : '';
+		self::set_state_cookie( '', time() - HOUR_IN_SECONDS );
+
+		if ( '' === (string) $state || '' === $cookie || ! hash_equals( $cookie, (string) $state ) ) {
+			return false;
+		}
+
+		return (bool) get_transient( self::VERIFIER_TRANSIENT . $state );
+	}
+
+	private static function set_state_cookie( $value, $expires ) {
+		setcookie(
+			self::STATE_COOKIE,
+			$value,
+			array(
+				'expires'  => $expires,
+				'path'     => ( defined( 'COOKIEPATH' ) && COOKIEPATH ) ? COOKIEPATH : '/',
+				'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+				'secure'   => is_ssl(),
+				'httponly' => true,
+				'samesite' => 'Lax',
+			)
+		);
+	}
+
 	/**
 	 * Zalo requires a 43-character verifier of mixed-case letters and digits.
 	 */

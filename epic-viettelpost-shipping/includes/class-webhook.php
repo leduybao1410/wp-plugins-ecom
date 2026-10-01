@@ -81,10 +81,26 @@ class Epic_VTP_Webhook {
 			return new WP_REST_Response( array( 'success' => true, 'message' => 'Order not found.' ), 200 );
 		}
 
-		$previous = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS );
+		$previous      = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS );
+		$incoming_date = isset( $data['ORDER_STATUSDATE'] ) ? sanitize_text_field( (string) $data['ORDER_STATUSDATE'] ) : '';
+		$stored_date   = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS_DATE );
+
+		// Out-of-order guard: ViettelPost retries and can deliver callbacks out
+		// of sequence. If this update is older than the last one applied, ack
+		// it (so retries stop) without regressing the shipment status.
+		if ( '' !== $incoming_date && '' !== $stored_date ) {
+			$incoming_ts = strtotime( $incoming_date );
+			$stored_ts   = strtotime( $stored_date );
+			if ( false !== $incoming_ts && false !== $stored_ts && $incoming_ts < $stored_ts ) {
+				return new WP_REST_Response( array( 'success' => true, 'message' => 'Stale update ignored.' ), 200 );
+			}
+		}
 
 		$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_STATUS, $status );
 		$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_LAST_SYNCED, current_time( 'mysql' ) );
+		if ( '' !== $incoming_date ) {
+			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_STATUS_DATE, $incoming_date );
+		}
 
 		if ( ! empty( $data['EXPECTED_DELIVERY'] ) && is_string( $data['EXPECTED_DELIVERY'] ) ) {
 			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_EXPECTED, sanitize_text_field( $data['EXPECTED_DELIVERY'] ) );
@@ -102,27 +118,40 @@ class Epic_VTP_Webhook {
 					__( 'ViettelPost status update: %1$s (%2$s)%3$s%4$s', 'epic-viettelpost-shipping' ),
 					Epic_VTP_Client::status_label( $status ),
 					$status,
-					! empty( $data['ORDER_STATUSDATE'] ) ? ' — ' . sanitize_text_field( $data['ORDER_STATUSDATE'] ) : '',
+					'' !== $incoming_date ? ' — ' . $incoming_date : '',
 					! empty( $data['NOTE'] ) ? ' — ' . sanitize_text_field( $data['NOTE'] ) : ''
 				)
 			);
 		}
 
+		// Return / delivery-issue workflow: flag the order so staff know to
+		// restock and (if needed) refund; optionally hold it.
+		if ( Epic_VTP_Client::is_return_or_issue( $status ) ) {
+			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION, 'return/issue' );
+			if ( 'yes' === $settings['return_hold'] && ! $order->has_status( array( 'on-hold', 'cancelled', 'refunded' ) ) ) {
+				$order->update_status( 'on-hold', __( 'ViettelPost: return/issue — held for restock/refund.', 'epic-viettelpost-shipping' ) );
+			} else {
+				$order->add_order_note( __( 'ViettelPost return/issue — check restock and refund.', 'epic-viettelpost-shipping' ) );
+			}
+		}
+
 		$order->save();
 
 		/**
-		 * Lets a site opt into transitioning the WooCommerce order on terminal
-		 * ViettelPost statuses. Off by default — completing an order is a
-		 * business decision the store owner should make explicitly.
+		 * Fires on every applied status change (webhook or manual override).
+		 * Lets other plugins react — e.g. epic-order-emails sends a "delivered"
+		 * email — without depending on this plugin's internals.
 		 *
-		 * @param bool     $should_transition
 		 * @param WC_Order $order
 		 * @param string   $status
+		 * @param string   $source 'webhook' | 'manual'.
 		 */
-		if ( apply_filters( 'epic_vtp_auto_complete_on_delivered', false, $order, $status ) ) {
-			if ( '501' === $status && ! $order->has_status( 'completed' ) ) {
-				$order->update_status( 'completed', __( 'ViettelPost: delivered.', 'epic-viettelpost-shipping' ) );
-			}
+		do_action( 'epic_vtp_status_changed', $order, $status, 'webhook' );
+
+		// Complete-on-delivery: the setting (or the legacy filter) opts in.
+		$auto_complete = 'yes' === $settings['auto_complete'] || apply_filters( 'epic_vtp_auto_complete_on_delivered', false, $order, $status );
+		if ( $auto_complete && '501' === $status && ! $order->has_status( 'completed' ) ) {
+			$order->update_status( 'completed', __( 'ViettelPost: delivered.', 'epic-viettelpost-shipping' ) );
 		}
 
 		return new WP_REST_Response( array( 'success' => true ), 200 );
@@ -130,21 +159,51 @@ class Epic_VTP_Webhook {
 
 	/**
 	 * Finds the WooCommerce order whose stored ViettelPost waybill matches.
+	 *
+	 * The lookup is storage-aware: `meta_query` is only supported by the HPOS
+	 * (custom order tables) datastore — on the legacy post-based store
+	 * WooCommerce 9.2+ logs "Order query argument (meta_query) is not
+	 * supported on the current order datastore" and may stop honoring it, so
+	 * the legacy branch queries the order postmeta directly instead.
 	 */
 	private static function find_order_by_waybill( $waybill ) {
-		$orders = wc_get_orders(
-			array(
-				'limit'      => 1,
-				'return'     => 'objects',
-				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- webhook lookup by waybill; infrequent and indexed enough at this store's volume.
-					array(
-						'key'   => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER,
-						'value' => $waybill,
+		$order_util = '\Automattic\WooCommerce\Utilities\OrderUtil';
+		$hpos       = class_exists( $order_util )
+			&& method_exists( $order_util, 'custom_orders_table_usage_is_enabled' )
+			&& $order_util::custom_orders_table_usage_is_enabled();
+
+		if ( $hpos ) {
+			$orders = wc_get_orders(
+				array(
+					'limit'      => 1,
+					'return'     => 'objects',
+					'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- HPOS-only lookup by waybill; infrequent and indexed enough at this store's volume.
+						array(
+							'key'   => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER,
+							'value' => $waybill,
+						),
 					),
-				),
+				)
+			);
+
+			return ! empty( $orders ) ? $orders[0] : false;
+		}
+
+		// Legacy (wp_posts) order storage: a direct postmeta lookup, which
+		// avoids the unsupported-meta_query warning and is not subject to its
+		// future removal.
+		$post_ids = get_posts(
+			array(
+				'post_type'      => 'shop_order',
+				'post_status'    => array_keys( wc_get_order_statuses() ),
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+				'meta_key'       => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- webhook lookup by waybill.
+				'meta_value'     => $waybill, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 			)
 		);
 
-		return ! empty( $orders ) ? $orders[0] : false;
+		return ! empty( $post_ids ) ? wc_get_order( $post_ids[0] ) : false;
 	}
 }

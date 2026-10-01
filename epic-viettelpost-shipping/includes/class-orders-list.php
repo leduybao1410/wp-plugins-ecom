@@ -17,7 +17,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Epic_VTP_Orders_List {
 
-	const BULK_SHIP_ACTION = 'epic_vtp_bulk_ship';
+	const BULK_SHIP_ACTION  = 'epic_vtp_bulk_ship';
+	const BULK_PRINT_ACTION = 'epic_vtp_bulk_print_labels';
 
 	/**
 	 * handle_ship_bulk_action() runs synchronously inside one request, so a
@@ -73,15 +74,69 @@ class Epic_VTP_Orders_List {
 	}
 
 	public static function add_bulk_action( $actions ) {
-		$actions[ self::BULK_SHIP_ACTION ] = __( 'Create ViettelPost shipment(s)', 'epic-viettelpost-shipping' );
+		$actions[ self::BULK_SHIP_ACTION ]  = __( 'Create ViettelPost shipment(s)', 'epic-viettelpost-shipping' );
+		$actions[ self::BULK_PRINT_ACTION ] = __( 'Print ViettelPost labels', 'epic-viettelpost-shipping' );
 		return $actions;
 	}
 
 	public static function handle_bulk_action( $redirect_to, $action, $order_ids ) {
-		if ( self::BULK_SHIP_ACTION !== $action ) {
+		if ( self::BULK_SHIP_ACTION === $action ) {
+			return self::handle_ship_bulk_action( $redirect_to, $order_ids );
+		}
+		if ( self::BULK_PRINT_ACTION === $action ) {
+			return self::handle_print_bulk_action( $redirect_to, $order_ids );
+		}
+		return $redirect_to;
+	}
+
+	/**
+	 * Builds one print URL for every selected order's waybill and stashes it
+	 * for render_notices() to surface after the redirect (a bulk action must
+	 * return a same-site URL, so the cross-site print link can't be the
+	 * redirect itself).
+	 */
+	private static function handle_print_bulk_action( $redirect_to, $order_ids ) {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
 			return $redirect_to;
 		}
-		return self::handle_ship_bulk_action( $redirect_to, $order_ids );
+
+		$order_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $order_ids ) ) ) );
+		$waybills  = array();
+		foreach ( $order_ids as $order_id ) {
+			$order = wc_get_order( $order_id );
+			if ( $order instanceof WC_Order ) {
+				$waybill = $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+				if ( $waybill ) {
+					$waybills[] = (string) $waybill;
+				}
+			}
+		}
+
+		if ( empty( $waybills ) ) {
+			return add_query_arg( 'epic_vtp_bulk_print_error', 'none', $redirect_to );
+		}
+
+		$token = Epic_VTP_Client::gen_print_token( $waybills );
+		if ( is_wp_error( $token ) ) {
+			return add_query_arg(
+				array(
+					'epic_vtp_bulk_print_error' => 'api',
+					'epic_vtp_bulk_print_msg'   => rawurlencode( $token->get_error_message() ),
+				),
+				$redirect_to
+			);
+		}
+
+		set_transient(
+			'epic_vtp_print_' . get_current_user_id(),
+			array(
+				'url'   => Epic_VTP_Client::print_url( $token, Epic_VTP_Client::get_settings()['label_size'], 'yes' === Epic_VTP_Client::get_settings()['label_show_postage'] ),
+				'count' => count( $waybills ),
+			),
+			5 * MINUTE_IN_SECONDS
+		);
+
+		return add_query_arg( 'epic_vtp_bulk_print_done', 1, $redirect_to );
 	}
 
 	/**
@@ -243,6 +298,38 @@ class Epic_VTP_Orders_List {
 					</div>
 					<?php
 				}
+			}
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only notice flag; data came from this user's own short-lived transient.
+		if ( ! empty( $_GET['epic_vtp_bulk_print_error'] ) ) {
+			$message = 'none' === $_GET['epic_vtp_bulk_print_error'] // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				? __( 'None of the selected orders have a booked ViettelPost shipment.', 'epic-viettelpost-shipping' )
+				: sanitize_text_field( rawurldecode( (string) ( $_GET['epic_vtp_bulk_print_msg'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			?>
+			<div class="notice notice-error is-dismissible"><p><?php echo esc_html( $message ); ?></p></div>
+			<?php
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only notice flag; data came from this user's own short-lived transient.
+		if ( ! empty( $_GET['epic_vtp_bulk_print_done'] ) ) {
+			$print = get_transient( 'epic_vtp_print_' . get_current_user_id() );
+			delete_transient( 'epic_vtp_print_' . get_current_user_id() );
+			if ( is_array( $print ) && ! empty( $print['url'] ) ) {
+				?>
+				<div class="notice notice-success is-dismissible epic-vtp-print-notice">
+					<p>
+						<?php
+						printf(
+							/* translators: %d: number of shipments */
+							esc_html( _n( 'Prepared a label for %d shipment.', 'Prepared labels for %d shipments.', (int) $print['count'], 'epic-viettelpost-shipping' ) ),
+							(int) $print['count']
+						);
+						?>
+						<a href="<?php echo esc_url( $print['url'] ); ?>" target="_blank" rel="noopener" class="button button-primary epic-vtp-open-print"><?php esc_html_e( 'Open labels', 'epic-viettelpost-shipping' ); ?></a>
+					</p>
+				</div>
+				<?php
 			}
 		}
 	}

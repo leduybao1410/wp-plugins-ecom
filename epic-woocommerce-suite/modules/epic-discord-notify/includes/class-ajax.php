@@ -48,13 +48,14 @@ class Epic_Discord_Ajax {
 
 		$code = (int) wp_remote_retrieve_response_code( $result );
 		if ( $code < 200 || $code >= 300 ) {
+			// Never reflect the response body — it can be from an unexpected
+			// host if the webhook URL is ever misconfigured.
 			wp_send_json_error(
 				array(
 					'message' => sprintf(
-						/* translators: 1: HTTP status code 2: response body */
-						__( 'Discord responded with HTTP %1$d: %2$s', 'epic-discord-notify' ),
-						$code,
-						wp_remote_retrieve_body( $result )
+						/* translators: %d: HTTP status code */
+						__( 'Discord responded with HTTP %d. Check the webhook URL and channel permissions.', 'epic-discord-notify' ),
+						$code
 					),
 				)
 			);

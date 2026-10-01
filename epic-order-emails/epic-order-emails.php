@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       EPIC Order Emails
  * Plugin URI:        https://epicroastery.example/
- * Description:       Two customer-facing WooCommerce emails for EPIC Roastery: an order-received confirmation, and a "your order has shipped" email carrying the ViettelPost tracking code once a staff member books the shipment in epic-viettelpost-shipping. Both are registered as normal WC_Email classes, so WooCommerce → Settings → Emails is the only admin screen this plugin needs.
- * Version:           1.1.0
+ * Description:       Customer-facing WooCommerce emails for EPIC Roastery: an order-received confirmation, a "your order has shipped" email carrying the ViettelPost tracking code once a staff member books the shipment in epic-viettelpost-shipping, and a "your order has been delivered" email sent when the ViettelPost webhook reports delivery. All are registered as normal WC_Email classes, so WooCommerce → Settings → Emails is the only admin screen this plugin needs.
+ * Version:           1.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_ORDER_EMAILS_VERSION', '1.1.0' );
+define( 'EPIC_ORDER_EMAILS_VERSION', '1.2.0' );
 define( 'EPIC_ORDER_EMAILS_PLUGIN_FILE', __FILE__ );
 define( 'EPIC_ORDER_EMAILS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_ORDER_EMAILS_URL', plugin_dir_url( __FILE__ ) );
@@ -100,12 +100,16 @@ add_filter(
 	function ( $email_classes ) {
 		require_once EPIC_ORDER_EMAILS_DIR . 'includes/class-email-order-created.php';
 		require_once EPIC_ORDER_EMAILS_DIR . 'includes/class-email-order-shipped.php';
+		require_once EPIC_ORDER_EMAILS_DIR . 'includes/class-email-order-delivered.php';
 
 		if ( class_exists( 'Epic_Email_Order_Created' ) ) {
 			$email_classes['epic_order_created'] = new Epic_Email_Order_Created();
 		}
 		if ( class_exists( 'Epic_Email_Order_Shipped' ) ) {
 			$email_classes['epic_order_shipped'] = new Epic_Email_Order_Shipped();
+		}
+		if ( class_exists( 'Epic_Email_Order_Delivered' ) ) {
+			$email_classes['epic_order_delivered'] = new Epic_Email_Order_Delivered();
 		}
 
 		return $email_classes;

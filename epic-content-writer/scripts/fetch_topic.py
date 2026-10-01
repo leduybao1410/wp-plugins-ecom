@@ -1,14 +1,29 @@
 #!/usr/bin/env python3
 """Fetch one EPIC journal topic (master VN post) and print its metadata + a
 structured plain-text rendering of the body, so it can be translated."""
-import json, re, html, subprocess, sys, os
+import json, re, html, subprocess, sys, os, urllib.parse
 
-slug = sys.argv[1]
-wc = subprocess.check_output(
-    ["bash", "-lc", r"""grep -E '^WC_URL=' /Volumes/data/Work/EPIC/website/.env | cut -d= -f2- | tr -d '"'"""],
-    text=True,
-).strip()
-url = f"{wc}/wp-json/wp/v2/posts?slug={slug}&_fields=id,slug,title,excerpt,categories,tags,featured_media,content"
+slug = sys.argv[1] if len(sys.argv) > 1 else ""
+if not slug or not re.match(r"^[A-Za-z0-9._-]+$", slug):
+    sys.exit("Usage: fetch_topic.py <slug>  (slug may contain letters, digits, . _ -)")
+
+# Read the base URL from the environment first; only fall back to reading the
+# site's .env directly (never shelling out to grep) when WC_URL is unset.
+wc = os.environ.get("WC_URL", "").strip()
+if not wc:
+    env_path = os.environ.get("EPIC_ENV_FILE", "/Volumes/data/Work/EPIC/website/.env")
+    try:
+        with open(env_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("WC_URL="):
+                    wc = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    except OSError:
+        pass
+if not wc:
+    sys.exit("WC_URL is not set (set the WC_URL env var or EPIC_ENV_FILE)")
+
+url = f"{wc}/wp-json/wp/v2/posts?slug={urllib.parse.quote(slug)}&_fields=id,slug,title,excerpt,categories,tags,featured_media,content"
 raw = subprocess.check_output(["curl", "-s", "--max-time", "30", url], text=True)
 i = min([p for p in (raw.find("{"), raw.find("[")) if p >= 0] or [0])
 post = json.loads(raw[i:])[0]

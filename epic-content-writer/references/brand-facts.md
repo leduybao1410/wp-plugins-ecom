@@ -1,6 +1,6 @@
 # EPIC brand facts (source of truth)
 
-Only use facts from this file when making claims about EPIC in an article. If a good article idea needs a fact that isn't here, ask the user for it rather than inventing one — these posts are published under EPIC's name. See SKILL.md's "Personalizing 'Vì sao chọn EPIC'" section for how to turn these facts into a closing section that's specific to each article rather than a reused template.
+Use this file for stable, approved facts about EPIC. For current offerings, product data, stock, pack sizes, prices, operating hours and wholesale terms, query the integrated `epic_site` MCP when writing or updating an article; this document is not the live catalog. If a stable fact needed for an article is not documented here, do not invent it — ask the user or leave it out. These posts are published under EPIC's name. See SKILL.md's "Personalizing 'Vì sao chọn EPIC'" section for how to tailor the closing section to each article.
 
 ## Company
 
@@ -10,7 +10,7 @@ Only use facts from this file when making claims about EPIC in an article. If a 
 - Roastery address: **54/8 Ao Đôi, Bình Hưng Hòa, Hồ Chí Minh** (production site).
 - Café address: **49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Thành phố Hồ Chí Minh** (retail/tasting location).
 
-## The six service lines (don't claim capabilities outside these)
+## Service scope (verify current availability and terms with MCP)
 
 1. **Bán lẻ cà phê** — roasted coffee sold direct (retail bags, online storefront).
 2. **Rang cà phê B2B theo yêu cầu** — contract roasting for other businesses/brands, tuned per-partner recipe.
@@ -18,8 +18,13 @@ Only use facts from this file when making claims about EPIC in an article. If a 
 4. **Setup quán cà phê trọn gói** — turnkey café setup service.
 5. **Đào tạo pha chế** — barista/brewing training.
 6. **Tư vấn, bán, cho thuê máy móc quán cà phê và sửa chữa kỹ thuật** — equipment consulting, sales, rental, and technical repair/maintenance for cafés. (Confirmed by user 2026-08-27: EPIC does offer machine rental, not just sales/repair.)
+7. **Cupping và gửi mẫu** — public service page offers free cupping at the roastery or coffee samples shipped to the partner. Confirm current availability with `get_service_info` before stating this as a current offer.
 
-(Confirmed by EPIC's own shop description and equipment banners — "Essential Setup for Brewing Perfection" and "Precision Care, Exceptional Flavor" — both equipment-service messaging.)
+The live service list can be returned by `get_service_info`; it currently includes wholesale/custom roasting and blending, OEM, café setup and training, equipment supply/rental/buyback/maintenance, and cupping/sample requests. `get_store_info` currently reports a 5kg/month wholesale minimum and quote-only B2B pricing. Re-check both facts at drafting time; do not use historical prices or old sales-pitch figures.
+
+## Product price and stock facts (never hand-maintain here)
+
+Product names, slugs, origins, tasting notes, pack sizes, public retail prices, and stock status are volatile. Retrieve them via `search_coffee` followed by `get_coffee`. Include a retail price only for the exact pack that MCP returned as priced and in stock, label it as checked on that date, and link to the returned product URL. Wholesale prices are private/quote-only and must never be included.
 
 ## Why-choose-EPIC angles, by pillar
 

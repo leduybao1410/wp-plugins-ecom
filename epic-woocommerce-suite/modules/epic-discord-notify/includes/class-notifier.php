@@ -237,13 +237,47 @@ class Epic_Discord_Notifier {
 	 * @return array|WP_Error
 	 */
 	public static function send( $webhook_url, $payload ) {
+		if ( ! self::is_allowed_webhook_url( $webhook_url ) ) {
+			return new WP_Error(
+				'epic_discord_bad_webhook',
+				__( 'The Discord webhook URL must be an https://discord.com/api/webhooks/… URL.', 'epic-discord-notify' )
+			);
+		}
+
 		return wp_remote_post(
 			$webhook_url,
 			array(
-				'headers' => array( 'Content-Type' => 'application/json' ),
-				'body'    => wp_json_encode( $payload ),
-				'timeout' => 10,
+				'headers'     => array( 'Content-Type' => 'application/json' ),
+				'body'        => wp_json_encode( $payload ),
+				'timeout'     => 10,
+				// Never follow redirects — prevents the saved URL being used to
+				// reach internal services through an open redirect.
+				'redirection' => 0,
 			)
 		);
+	}
+
+	/**
+	 * Allowlist Discord webhook hosts to prevent SSRF via a stored URL.
+	 *
+	 * @param string $webhook_url
+	 * @return bool
+	 */
+	public static function is_allowed_webhook_url( $webhook_url ) {
+		$webhook_url = trim( (string) $webhook_url );
+		if ( '' === $webhook_url ) {
+			return false;
+		}
+		$parts = wp_parse_url( $webhook_url );
+		if ( empty( $parts['scheme'] ) || 'https' !== strtolower( $parts['scheme'] ) ) {
+			return false;
+		}
+		$host = isset( $parts['host'] ) ? strtolower( $parts['host'] ) : '';
+		$allowed_hosts = array( 'discord.com', 'discordapp.com', 'canary.discord.com', 'ptb.discord.com' );
+		if ( ! in_array( $host, $allowed_hosts, true ) ) {
+			return false;
+		}
+		$path = isset( $parts['path'] ) ? $parts['path'] : '';
+		return 0 === strpos( $path, '/api/webhooks/' );
 	}
 }

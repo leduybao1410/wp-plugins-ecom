@@ -60,7 +60,15 @@ class Epic_Zalo_Login {
 	public static function start_login() {
 		check_admin_referer( 'epic_zalo_login' );
 
-		$state = wp_create_nonce( 'epic_zalo_login' );
+		if ( ! Epic_Zalo_Settings::is_configured() ) {
+			wp_die( esc_html__( 'Zalo login is not configured yet. Please try again later.', 'epic-zalo-login' ) );
+		}
+
+		// Cryptographically random, single-use state bound to THIS browser via a
+		// cookie — never a shared WordPress nonce.
+		$state = bin2hex( random_bytes( 32 ) );
+		Epic_Zalo_Oauth::start_state( $state );
+
 		wp_redirect( Epic_Zalo_Oauth::build_authorize_url( $state ) );
 		exit;
 	}
@@ -75,8 +83,8 @@ class Epic_Zalo_Login {
 			wp_die( esc_html__( 'Zalo did not return an authorization code.', 'epic-zalo-login' ) );
 		}
 
-		$state = sanitize_text_field( wp_unslash( $_GET['state'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- verified below.
-		if ( ! wp_verify_nonce( $state, 'epic_zalo_login' ) ) {
+		$state = sanitize_text_field( wp_unslash( $_GET['state'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- bound to a per-browser cookie below.
+		if ( ! Epic_Zalo_Oauth::verify_state( $state ) ) {
 			wp_die( esc_html__( 'Invalid login state. Please try again.', 'epic-zalo-login' ) );
 		}
 

@@ -216,6 +216,74 @@ class Epic_VTP_Settings extends WC_Settings_Page {
 			),
 
 			array(
+				'title' => __( 'Fulfilment automation', 'epic-viettelpost-shipping' ),
+				'type'  => 'title',
+				'desc'  => __( 'What the plugin does automatically as ViettelPost updates shipment status (via the webhook).', 'epic-viettelpost-shipping' ),
+				'id'    => 'epic_vtp_automation_title',
+			),
+			array(
+				'title'   => __( 'Complete the order on delivery', 'epic-viettelpost-shipping' ),
+				'id'      => 'epic_vtp_auto_complete',
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'desc'    => __( 'When a shipment reaches "Delivered", move its WooCommerce order to Completed.', 'epic-viettelpost-shipping' ),
+			),
+			array(
+				'title'   => __( 'Hold the order if booking fails', 'epic-viettelpost-shipping' ),
+				'id'      => 'epic_vtp_hold_on_failure',
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'desc'    => __( 'When a shipment can\'t be booked, put the order on hold so it surfaces for manual follow-up.', 'epic-viettelpost-shipping' ),
+			),
+			array(
+				'title'   => __( 'Hold the order on a return/issue', 'epic-viettelpost-shipping' ),
+				'id'      => 'epic_vtp_return_hold',
+				'type'    => 'checkbox',
+				'default' => 'no',
+				'desc'    => __( 'When a shipment is returned or hits a delivery issue, put the order on hold and flag it for restock/refund.', 'epic-viettelpost-shipping' ),
+			),
+			array(
+				'title'             => __( 'Flag shipments stale after (days)', 'epic-viettelpost-shipping' ),
+				'id'                => 'epic_vtp_stale_days',
+				'type'              => 'number',
+				'default'           => '7',
+				'custom_attributes' => array( 'min' => '1' ),
+				'desc_tip'          => __( 'A booked shipment with no webhook update for this many days is flagged on the Shipments screen for a manual status check (ViettelPost has no status-poll API, so this is a safety net for missed callbacks).', 'epic-viettelpost-shipping' ),
+			),
+			array(
+				'type' => 'sectionend',
+				'id'   => 'epic_vtp_automation_end',
+			),
+
+			array(
+				'title' => __( 'Label printing', 'epic-viettelpost-shipping' ),
+				'type'  => 'title',
+				'id'    => 'epic_vtp_label_title',
+			),
+			array(
+				'title'   => __( 'Label size', 'epic-viettelpost-shipping' ),
+				'id'      => 'epic_vtp_label_size',
+				'type'    => 'select',
+				'default' => '1',
+				'options' => array(
+					'1'   => __( 'A5', 'epic-viettelpost-shipping' ),
+					'2'   => __( 'A6', 'epic-viettelpost-shipping' ),
+					'100' => __( 'A7', 'epic-viettelpost-shipping' ),
+				),
+			),
+			array(
+				'title'   => __( 'Show postage on the label', 'epic-viettelpost-shipping' ),
+				'id'      => 'epic_vtp_label_show_postage',
+				'type'    => 'checkbox',
+				'default' => 'yes',
+				'desc'    => __( 'Print the shipping fee (cước phí) on the label.', 'epic-viettelpost-shipping' ),
+			),
+			array(
+				'type' => 'sectionend',
+				'id'   => 'epic_vtp_label_end',
+			),
+
+			array(
 				'title' => __( 'Webhook (status sync)', 'epic-viettelpost-shipping' ),
 				'type'  => 'title',
 				'desc'  => __( 'Register the URL below under viettelpost.vn → Cấu hình tài khoản → Cấu hình webhook, and enter the same secret here. ViettelPost sends it back in the Authorization header on every callback.', 'epic-viettelpost-shipping' ),

@@ -57,6 +57,23 @@ done
 : "${CONTENT_FILE:?Set --content-file}"
 : "${CATEGORY_ID:?Set --category-id}"
 
+# Confine the content file to a base directory (see publish_post.sh).
+resolve_content_file() {
+  local f="$1" real base
+  if [[ ! -f "$f" ]]; then
+    echo "ERROR: content file not found: $f" >&2
+    exit 1
+  fi
+  real="$(cd "$(dirname "$f")" && pwd)/$(basename "$f")"
+  base="$(cd "${CONTENT_BASE_DIR:-$PWD}" && pwd)"
+  if [[ "$real" != "$base"/* ]]; then
+    echo "ERROR: content file must be inside $base (got $real). Set CONTENT_BASE_DIR to allow another directory." >&2
+    exit 1
+  fi
+  printf '%s' "$real"
+}
+CONTENT_FILE="$(resolve_content_file "$CONTENT_FILE")"
+
 if [[ -z "${WP_APP_PASSWORD:-}" && -z "${WP_PASSWORD:-}" ]]; then
   echo "Set either WP_APP_PASSWORD (Basic Auth) or WP_PASSWORD (JWT)." >&2
   exit 1
@@ -74,7 +91,12 @@ sys.stdout.write(raw[m.start():] if m else raw)
 }
 
 if [[ -n "${WP_APP_PASSWORD:-}" ]]; then
-  AUTH=(-u "${WP_USER}:${WP_APP_PASSWORD}")
+  # Basic Auth via a 0600 curl config file — never on argv.
+  AUTH_CONFIG="$(mktemp)"
+  chmod 600 "$AUTH_CONFIG"
+  printf 'user = "%s:%s"\n' "$WP_USER" "$WP_APP_PASSWORD" > "$AUTH_CONFIG"
+  trap 'rm -f "$AUTH_CONFIG"' EXIT
+  AUTH=(--config "$AUTH_CONFIG")
 else
   TOKEN=$(curl -s -X POST "$WC_URL/wp-json/jwt-auth/v1/token" \
     --data-urlencode "username=${WP_USER}" \

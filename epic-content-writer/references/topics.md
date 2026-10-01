@@ -1,6 +1,6 @@
-# Topic bank — 6 pillars × 10 subtopics = 60-day rotation
+# Topic idea bank — 6 pillars × 10 candidate angles
 
-Ordered lists. Index 0 is the first subtopic used for that pillar, etc. — see "Picking the next topic" in SKILL.md for how `pillar_index`/`subtopic_index` select from here. Once all 60 are used, start again from index 0 (industry moves fast enough, and sources will have changed, that a repeat 2 months later is a genuine refresh, not a rerun) — or ask the user for a second batch of subtopics per pillar.
+These ordered lists are candidate angles, not a publishing queue or schedule. Select an angle only when Search Console and the existing article inventory show an uncovered search need. Topics outside this bank are also welcome when the evidence supports them; do not restart the list after exhausting its ideas.
 
 ## 0 — Bán Lẻ Cà Phê (category 84)
 0. Cách chọn cà phê rang xay theo khẩu vị (đậm/nhạt, Arabica vs Robusta)

@@ -32,7 +32,13 @@ class Epic_Account_Service {
 
 		$existing = get_user_by( 'email', $email );
 		if ( $existing ) {
-			update_user_meta( $existing->ID, 'epic_google_sub', (string) $google_sub );
+			// Never overwrite an already-bound Google identity — doing so would
+			// be an account-takeover primitive if a caller supplied a victim's
+			// email. Only set the meta when it is still empty.
+			$current = (string) get_user_meta( $existing->ID, 'epic_google_sub', true );
+			if ( '' === $current ) {
+				update_user_meta( $existing->ID, 'epic_google_sub', (string) $google_sub );
+			}
 			return (int) $existing->ID;
 		}
 

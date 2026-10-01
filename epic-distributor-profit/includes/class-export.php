@@ -83,9 +83,25 @@ class Epic_Distributor_Profit_Export {
 		fwrite( $handle, "\xEF\xBB\xBF" );
 		fputcsv( $handle, array_values( $columns ) );
 		foreach ( $rows as $row ) {
-			fputcsv( $handle, self::row_values( $row, $columns ) );
+			fputcsv( $handle, array_map( array( __CLASS__, 'csv_safe' ), self::row_values( $row, $columns ) ) );
 		}
 		fclose( $handle );
+	}
+
+	/**
+	 * Neutralise CSV/formula injection: a spreadsheet treats a cell starting
+	 * with = + - @ TAB or CR as a formula, which can exfiltrate data or run
+	 * DDE on open. Prefix such values with a single quote.
+	 *
+	 * @param mixed $value
+	 * @return string
+	 */
+	private static function csv_safe( $value ) {
+		$value = (string) $value;
+		if ( '' !== $value && preg_match( '/^[=\-+@\t\r]/', $value ) ) {
+			return "'" . $value;
+		}
+		return $value;
 	}
 
 	/**

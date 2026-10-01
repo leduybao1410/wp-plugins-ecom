@@ -169,7 +169,22 @@ class Epic_Adv_Coupons_Restrictions {
 			return null;
 		}
 
-		if ( self::meta( $coupon, Epic_Adv_Coupons_Meta::FIRST_ORDER_ONLY ) === 'yes' ) {
+		$first_order_only = self::meta( $coupon, Epic_Adv_Coupons_Meta::FIRST_ORDER_ONLY ) === 'yes';
+		$allowlist        = trim( (string) self::meta( $coupon, Epic_Adv_Coupons_Meta::ALLOWLIST ) );
+		$email            = (string) $email;
+		$phone            = (string) $phone;
+
+		// At checkout-submit time a restricted coupon must be tied to a known
+		// customer; "identity unknown" must fail closed, not open.
+		if ( $final_check && ( $first_order_only || '' !== $allowlist ) && '' === $email && '' === $phone ) {
+			return sprintf(
+				/* translators: %s: coupon code */
+				__( 'Coupon "%s" requires a customer email or phone number.', 'epic-advanced-coupons' ),
+				$coupon->get_code()
+			);
+		}
+
+		if ( $first_order_only ) {
 			if ( $email && self::has_prior_order( $email ) ) {
 				return sprintf(
 					/* translators: %s: coupon code */
@@ -179,7 +194,6 @@ class Epic_Adv_Coupons_Restrictions {
 			}
 		}
 
-		$allowlist = trim( (string) self::meta( $coupon, Epic_Adv_Coupons_Meta::ALLOWLIST ) );
 		if ( $allowlist && ( $email || $phone ) ) {
 			if ( ! self::matches_allowlist( $allowlist, $email, $phone ) ) {
 				return sprintf(

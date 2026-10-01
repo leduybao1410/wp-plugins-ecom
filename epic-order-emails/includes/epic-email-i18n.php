@@ -212,6 +212,25 @@ if ( ! function_exists( 'epic_email_str' ) ) {
 				),
 				'os_eta' => array( 'en' => 'Estimated delivery:', 'vi' => 'Dự kiến giao hàng:', 'ru' => 'Ожидаемая доставка:', 'hi' => 'अनुमानित डिलीवरी:', 'zh' => '预计送达：', 'ko' => '예상 배송:', 'ja' => 'お届け予定：' ),
 				'os_cod' => array( 'en' => 'Cash on delivery (COD) amount:', 'vi' => 'Số tiền thanh toán khi nhận hàng (COD):', 'ru' => 'Сумма оплаты при получении (COD):', 'hi' => 'डिलीवरी पर नकद (COD) राशि:', 'zh' => '货到付款（COD）金额：', 'ko' => '착불(COD) 금액:', 'ja' => '代金引換（COD）金額：' ),
+				// --- Order delivered ----------------------------------------
+				'od_delivered' => array(
+					'en' => 'Your order #%s has been delivered. Enjoy your coffee!',
+					'vi' => 'Đơn hàng #%s của bạn đã được giao thành công. Chúc bạn thưởng thức cà phê ngon miệng!',
+					'ru' => 'Ваш заказ #%s доставлен. Приятного кофе!',
+					'hi' => 'आपका ऑर्डर #%s डिलीवर कर दिया गया है। अपनी कॉफ़ी का आनंद लें!',
+					'zh' => '您的订单 #%s 已送达。祝您享用咖啡愉快！',
+					'ko' => '주문 #%s이(가) 배송 완료되었습니다. 커피를 즐기세요!',
+					'ja' => 'ご注文 #%s がお届け完了しました。コーヒーをお楽しみください！',
+				),
+				'od_feedback' => array(
+					'en' => "We'd love to hear how it tastes — just reply to this email and tell us what you think.",
+					'vi' => 'Chúng tôi rất muốn biết bạn cảm nhận hương vị thế nào — chỉ cần trả lời email này và chia sẻ với chúng tôi nhé.',
+					'ru' => 'Нам будет приятно узнать, как вам вкус, — просто ответьте на это письмо и расскажите.',
+					'hi' => 'हमें जानना अच्छा लगेगा कि स्वाद कैसा लगा — बस इस ईमेल का जवाब देकर बताइए।',
+					'zh' => '很想知道您觉得味道如何——回复本邮件告诉我们即可。',
+					'ko' => '맛이 어떠셨는지 궁금합니다. 이 메일에 답장으로 알려주세요.',
+					'ja' => '味はいかがでしたか？このメールに返信してぜひ教えてください。',
+				),
 				// --- Branding header/footer --------------------------------
 				'brand_tagline' => array(
 					'en' => 'Doing better each day · Specialty coffee roasted in Sài Gòn since 2014',
@@ -290,6 +309,15 @@ if ( ! function_exists( 'epic_email_str' ) ) {
 					'ko' => '주문이 배송 중입니다',
 					'ja' => 'ご注文を発送しました',
 				),
+				'heading_order_delivered' => array(
+					'en' => 'Your order has been delivered',
+					'vi' => 'Đơn hàng của bạn đã được giao',
+					'ru' => 'Ваш заказ доставлен',
+					'hi' => 'आपका ऑर्डर डिलीवर हो गया है',
+					'zh' => '您的订单已送达',
+					'ko' => '주문이 배송 완료되었습니다',
+					'ja' => 'ご注文がお届け完了しました',
+				),
 				// --- Subjects (placeholders preserved) ----------------------
 				'subject_newsletter' => array(
 					'en' => '[{site_title}] Thanks for subscribing',
@@ -335,6 +363,15 @@ if ( ! function_exists( 'epic_email_str' ) ) {
 					'zh' => '[{site_title}] 订单 #{order_number} 已发货',
 					'ko' => '[{site_title}] 주문 #{order_number}이(가) 발송되었습니다',
 					'ja' => '[{site_title}] ご注文 #{order_number} を発送しました',
+				),
+				'subject_order_delivered' => array(
+					'en' => '[{site_title}] Order #{order_number} delivered',
+					'vi' => '[{site_title}] Đơn hàng #{order_number} đã giao thành công',
+					'ru' => '[{site_title}] Заказ №{order_number} доставлен',
+					'hi' => '[{site_title}] ऑर्डर #{order_number} डिलीवर हो गया',
+					'zh' => '[{site_title}] 订单 #{order_number} 已送达',
+					'ko' => '[{site_title}] 주문 #{order_number} 배송 완료',
+					'ja' => '[{site_title}] ご注文 #{order_number} お届け完了',
 				),
 				// --- Admin/staff notifications (localized to the submitter) --
 				'label_phone' => array( 'en' => 'Phone number', 'vi' => 'Số điện thoại', 'ru' => 'Телефон', 'hi' => 'फ़ोन', 'zh' => '电话', 'ko' => '전화', 'ja' => '電話' ),

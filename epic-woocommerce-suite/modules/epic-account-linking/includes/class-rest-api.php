@@ -74,7 +74,64 @@ class Epic_Account_Rest_Api {
 		if ( empty( $provided ) || ! hash_equals( $configured, $provided ) ) {
 			return new \WP_Error( 'epic_account_linking_forbidden', 'Invalid or missing X-Epic-Secret header.', array( 'status' => 403 ) );
 		}
+
+		// When an identity secret is configured, a valid per-request assertion
+		// is mandatory — the shared secret alone no longer proves *whose*
+		// account the request is for.
+		if ( '' !== self::identity_secret() && null === self::identity( $request ) ) {
+			return new \WP_Error( 'epic_account_identity_required', 'A valid X-Epic-Identity assertion is required.', array( 'status' => 403 ) );
+		}
+
 		return true;
+	}
+
+	/** Secret used to verify the X-Epic-Identity assertion (constant or option). */
+	private static function identity_secret() {
+		if ( defined( 'EPIC_IDENTITY_SECRET' ) && EPIC_IDENTITY_SECRET ) {
+			return (string) EPIC_IDENTITY_SECRET;
+		}
+		return (string) get_option( 'epic_identity_secret', '' );
+	}
+
+	/**
+	 * Verify and decode the signed identity assertion.
+	 *
+	 * @return array{sub:string,email:string}|null
+	 */
+	private static function identity( \WP_REST_Request $request ) {
+		$secret = self::identity_secret();
+		if ( '' === $secret ) {
+			return null;
+		}
+		$assertion = (string) $request->get_header( 'x-epic-identity' );
+		if ( '' === $assertion || false === strpos( $assertion, '.' ) ) {
+			return null;
+		}
+		$parts    = explode( '.', $assertion, 2 );
+		$expected = hash_hmac( 'sha256', $parts[0], $secret );
+		if ( ! hash_equals( $expected, $parts[1] ) ) {
+			return null;
+		}
+		$json = json_decode( (string) base64_decode( strtr( $parts[0], '-_', '+/' ), true ), true );
+		if ( ! is_array( $json ) || ! isset( $json['sub'], $json['ts'] ) ) {
+			return null;
+		}
+		if ( abs( time() - (int) $json['ts'] ) > 300 ) {
+			return null;
+		}
+		return array(
+			'sub'   => sanitize_text_field( (string) $json['sub'] ),
+			'email' => isset( $json['email'] ) ? strtolower( sanitize_email( (string) $json['email'] ) ) : '',
+		);
+	}
+
+	/** The account subject: the verified assertion when present, else the URL param. */
+	private static function requested_sub( \WP_REST_Request $request ) {
+		$asserted = self::identity( $request );
+		if ( $asserted && '' !== $asserted['sub'] ) {
+			return $asserted['sub'];
+		}
+		return (string) $request->get_param( 'google_sub' );
 	}
 
 	/** Upsert an account from a Google sign-in, then auto-link by email. */
@@ -88,6 +145,15 @@ class Epic_Account_Rest_Api {
 		$email      = isset( $params['email'] ) ? strtolower( sanitize_email( (string) $params['email'] ) ) : '';
 		$name       = isset( $params['name'] ) ? sanitize_text_field( (string) $params['name'] ) : '';
 		$picture    = isset( $params['picture_url'] ) ? esc_url_raw( (string) $params['picture_url'] ) : '';
+
+		// Prefer the verified assertion over client-supplied body values.
+		$asserted = self::identity( $request );
+		if ( $asserted ) {
+			$google_sub = $asserted['sub'];
+			if ( '' !== $asserted['email'] ) {
+				$email = $asserted['email'];
+			}
+		}
 
 		if ( empty( $google_sub ) || strlen( $google_sub ) > 64 ) {
 			return new \WP_Error( 'epic_account_bad_request', 'google_sub is required and must be ≤ 64 characters.', array( 'status' => 400 ) );
@@ -131,7 +197,7 @@ class Epic_Account_Rest_Api {
 	}
 
 	public static function list_orders( \WP_REST_Request $request ) {
-		$account = Epic_Account_Store::get_account_by_sub( (string) $request->get_param( 'google_sub' ) );
+		$account = Epic_Account_Store::get_account_by_sub( self::requested_sub( $request ) );
 		if ( ! $account ) {
 			return new \WP_Error( 'epic_account_not_found', 'No such account.', array( 'status' => 404 ) );
 		}
@@ -142,7 +208,7 @@ class Epic_Account_Rest_Api {
 	}
 
 	public static function get_order( \WP_REST_Request $request ) {
-		$account = Epic_Account_Store::get_account_by_sub( (string) $request->get_param( 'google_sub' ) );
+		$account = Epic_Account_Store::get_account_by_sub( self::requested_sub( $request ) );
 		if ( ! $account ) {
 			return new \WP_Error( 'epic_account_not_found', 'No such account.', array( 'status' => 404 ) );
 		}
@@ -156,7 +222,7 @@ class Epic_Account_Rest_Api {
 	}
 
 	public static function claim_order( \WP_REST_Request $request ) {
-		$account = Epic_Account_Store::get_account_by_sub( (string) $request->get_param( 'google_sub' ) );
+		$account = Epic_Account_Store::get_account_by_sub( self::requested_sub( $request ) );
 		if ( ! $account ) {
 			return new \WP_Error( 'epic_account_not_found', 'No such account.', array( 'status' => 404 ) );
 		}

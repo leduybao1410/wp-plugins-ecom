@@ -19,12 +19,14 @@ class Epic_VTP_Order_Meta_Box {
 	const META_ORDER_NUMBER   = '_vtp_order_number';
 	const META_EXPECTED       = '_vtp_expected_delivery';
 	const META_STATUS         = '_vtp_shipment_status';
+	const META_STATUS_DATE    = '_vtp_status_date';
 	const META_LAST_SYNCED    = '_vtp_last_synced_at';
 	const META_COD_AMOUNT     = '_vtp_cod_amount';
 	const META_FEE            = '_vtp_fee';
 	const META_SERVICE        = '_vtp_service';
 	const META_PROVINCE_ID    = '_vtp_province_id';
 	const META_PROVINCE_NAME  = '_vtp_province_name';
+	const META_NEEDS_ACTION   = '_vtp_needs_action';
 
 	public static function init() {
 		add_action( 'add_meta_boxes', array( __CLASS__, 'add_meta_box' ) );
@@ -119,12 +121,26 @@ class Epic_VTP_Order_Meta_Box {
 	}
 
 	private static function render_booked_state( WC_Order $order, $tracking_code ) {
-		$eta    = $order->get_meta( self::META_EXPECTED );
-		$status = (string) $order->get_meta( self::META_STATUS );
-		$bucket = Epic_VTP_Client::bucket_status( $status );
-		$synced = $order->get_meta( self::META_LAST_SYNCED );
-		$fee    = $order->get_meta( self::META_FEE );
+		$eta      = $order->get_meta( self::META_EXPECTED );
+		$status   = (string) $order->get_meta( self::META_STATUS );
+		$bucket   = Epic_VTP_Client::bucket_status( $status );
+		$synced   = $order->get_meta( self::META_LAST_SYNCED );
+		$fee      = (string) $order->get_meta( self::META_FEE );
+		$needs    = (string) $order->get_meta( self::META_NEEDS_ACTION );
+		$quoted   = (float) $order->get_shipping_total() + (float) $order->get_shipping_tax();
 		?>
+		<?php if ( '' !== $needs ) : ?>
+			<div class="notice notice-warning inline epic-vtp-inline-notice"><p>
+				<?php
+				printf(
+					/* translators: %s: action keyword (return/issue) */
+					esc_html__( 'Action needed: this shipment hit a %s — check restock/refund and resolve before closing.', 'epic-viettelpost-shipping' ),
+					esc_html( $needs )
+				);
+				?>
+			</p></div>
+		<?php endif; ?>
+
 		<p>
 			<strong><?php esc_html_e( 'Tracking code', 'epic-viettelpost-shipping' ); ?>:</strong>
 			<code class="epic-vtp-tracking-code"><?php echo esc_html( $tracking_code ); ?></code>
@@ -136,8 +152,23 @@ class Epic_VTP_Order_Meta_Box {
 		<?php if ( $eta ) : ?>
 			<p><strong><?php esc_html_e( 'Expected delivery', 'epic-viettelpost-shipping' ); ?>:</strong> <?php echo esc_html( $eta ); ?></p>
 		<?php endif; ?>
-		<?php if ( '' !== (string) $fee ) : ?>
-			<p><strong><?php esc_html_e( 'Shipping fee', 'epic-viettelpost-shipping' ); ?>:</strong> <?php echo esc_html( wp_strip_all_tags( wc_price( (float) $fee ) ) ); ?></p>
+		<?php if ( '' !== $fee ) : ?>
+			<p><strong><?php esc_html_e( 'Courier fee', 'epic-viettelpost-shipping' ); ?>:</strong> <?php echo esc_html( wp_strip_all_tags( wc_price( (float) $fee ) ) ); ?>
+				<?php
+				// Fee reconciliation: under the sender-pays model the store bills
+				// the customer the order's shipping line and settles ViettelPost's
+				// actual fee, so a delta here is real margin (or loss).
+				$delta = (float) $fee - $quoted;
+				if ( abs( $delta ) >= 1 ) {
+					printf(
+						' <em class="%1$s">(%2$s %3$s)</em>',
+						esc_attr( $delta > 0 ? 'epic-vtp-delta-loss' : 'epic-vtp-delta-gain' ),
+						esc_html( $delta > 0 ? __( 'over the shipping charged:', 'epic-viettelpost-shipping' ) : __( 'under the shipping charged:', 'epic-viettelpost-shipping' ) ),
+						esc_html( wp_strip_all_tags( wc_price( abs( $delta ) ) ) )
+					);
+				}
+				?>
+			</p>
 		<?php endif; ?>
 		<?php if ( $synced ) : ?>
 			<p class="epic-vtp-last-synced"><em>
@@ -152,15 +183,23 @@ class Epic_VTP_Order_Meta_Box {
 		<?php endif; ?>
 
 		<p class="description">
-			<?php esc_html_e( 'Status is kept current by the ViettelPost webhook. Configure it under WooCommerce → Settings → ViettelPost Shipping.', 'epic-viettelpost-shipping' ); ?>
+			<?php esc_html_e( 'Status is kept current by the ViettelPost webhook. If a call was missed, set the last-known status below.', 'epic-viettelpost-shipping' ); ?>
+		</p>
+
+		<p class="epic-vtp-manual-status">
+			<label for="epic-vtp-set-status-<?php echo esc_attr( $order->get_id() ); ?>"><?php esc_html_e( 'Set status', 'epic-viettelpost-shipping' ); ?></label>
+			<select id="epic-vtp-set-status-<?php echo esc_attr( $order->get_id() ); ?>" class="epic-vtp-status-select">
+				<?php foreach ( Epic_VTP_Client::status_map() as $code => $label ) : ?>
+					<option value="<?php echo esc_attr( $code ); ?>" <?php selected( $code, $status ); ?>><?php echo esc_html( $label ); ?></option>
+				<?php endforeach; ?>
+			</select>
+			<button type="button" class="button epic-vtp-action" data-action="set_status"><?php esc_html_e( 'Update', 'epic-viettelpost-shipping' ); ?></button>
 		</p>
 
 		<p class="epic-vtp-actions">
 			<button type="button" class="button epic-vtp-action" data-action="print_label">
 				<?php esc_html_e( 'Print label', 'epic-viettelpost-shipping' ); ?>
 			</button>
-		</p>
-		<p class="epic-vtp-actions">
 			<button type="button" class="button epic-vtp-action epic-vtp-danger" data-action="cancel_shipment">
 				<?php esc_html_e( 'Cancel shipment', 'epic-viettelpost-shipping' ); ?>
 			</button>
@@ -207,14 +246,12 @@ class Epic_VTP_Order_Meta_Box {
 			<?php
 			if ( $is_cod ) {
 				// Mirrors Epic_VTP_Ajax::book_single_order()'s $cod_amount: the
-				// goods-only portion (order total minus WooCommerce's own
-				// shipping_total), so the courier never collects the shipping
-				// fee twice.
-				$cod_amount_preview = max( 0, (float) $order->get_total() - (float) $order->get_shipping_total() - (float) $order->get_shipping_tax() );
+				// full order total (goods + the shipping fee already inside the
+				// order price), collected once. ViettelPost's own fee is billed
+				// to the sender, so nothing is added at the door.
 				printf(
-					/* translators: 1: formatted goods amount to collect on delivery, 2: formatted order total */
-					esc_html__( 'will book as COD, collecting %1$s on delivery for the goods (ViettelPost separately collects its own shipping fee from the recipient) -- together that comes out to the order total of %2$s.', 'epic-viettelpost-shipping' ),
-					wp_kses_post( wp_strip_all_tags( wc_price( $cod_amount_preview ) ) ),
+					/* translators: %s: formatted order total to collect on delivery */
+					esc_html__( 'will book as COD, collecting %s on delivery — the full order total (shipping included), matching what the customer was shown at checkout. ViettelPost\'s own shipping fee is billed to us, so nothing is added at the door.', 'epic-viettelpost-shipping' ),
 					wp_kses_post( wp_strip_all_tags( wc_price( $order->get_total() ) ) )
 				);
 			} else {

@@ -278,6 +278,24 @@
 						feedback( $fb, i18n.genericError, true );
 						$btn.prop( 'disabled', false );
 					} );
+				} else if ( action === 'set_status' ) {
+					var status = $box.find( '.epic-vtp-status-select' ).val();
+					if ( ! status ) {
+						return;
+					}
+					$btn.prop( 'disabled', true );
+					feedback( $fb, i18n.syncing || 'Updating…', false );
+					ajax( 'epic_vtp_set_shipment_status', { order_id: orderId, status: status } ).done( function ( res ) {
+						if ( res && res.success ) {
+							window.location.reload();
+						} else {
+							feedback( $fb, ( res && res.data && res.data.message ) || i18n.genericError, true );
+							$btn.prop( 'disabled', false );
+						}
+					} ).fail( function () {
+						feedback( $fb, i18n.genericError, true );
+						$btn.prop( 'disabled', false );
+					} );
 				}
 			} );
 		},
@@ -331,10 +349,60 @@
 		},
 	};
 
+	// ------------------------------------------------------------------
+	// Shipments dashboard
+	// ------------------------------------------------------------------
+
+	var Dashboard = {
+		init: function () {
+			var $table = $( '.epic-vtp-shipments' );
+			if ( ! $table.length ) {
+				return;
+			}
+
+			var $all = $table.find( '.epic-vtp-check-all' );
+			var $rows = $table.find( '.epic-vtp-row' );
+			var $print = $( '.epic-vtp-bulk-print' );
+			var $fb = $print.siblings( '.epic-vtp-feedback' );
+
+			function refresh() {
+				$print.prop( 'disabled', $rows.filter( ':checked' ).length === 0 );
+			}
+
+			$all.on( 'change', function () {
+				$rows.prop( 'checked', $all.prop( 'checked' ) );
+				refresh();
+			} );
+			$rows.on( 'change', refresh );
+
+			$print.on( 'click', function () {
+				var ids = $rows.filter( ':checked' ).map( function () { return this.value; } ).get();
+				if ( ! ids.length ) {
+					return;
+				}
+				$print.prop( 'disabled', true );
+				feedback( $fb, i18n.generatingLabel || 'Generating…', false );
+				ajax( 'epic_vtp_bulk_print', { order_ids: ids } ).done( function ( res ) {
+					if ( res && res.success && res.data.url ) {
+						window.open( res.data.url, '_blank' );
+						feedback( $fb, '', false );
+					} else {
+						feedback( $fb, ( res && res.data && res.data.message ) || i18n.genericError, true );
+					}
+					refresh();
+				} ).fail( function () {
+					feedback( $fb, i18n.genericError, true );
+					refresh();
+				} );
+			} );
+		},
+	};
+
 	$( function () {
 		Address.init();
 		MetaBox.init();
 		OrdersList.init();
+		Dashboard.init();
 
 		$( document ).on( 'click', '.epic-vtp-test-connection', function () {
 			var $btn = $( this );

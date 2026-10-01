@@ -19,13 +19,15 @@ class Epic_VTP_Ajax {
 
 	public static function init() {
 		$actions = array(
-			'epic_vtp_get_provinces'   => 'get_provinces',
-			'epic_vtp_get_wards'       => 'get_wards',
-			'epic_vtp_test_connection' => 'test_connection',
-			'epic_vtp_resolve_address' => 'resolve_address',
-			'epic_vtp_ship_order'      => 'ship_order',
-			'epic_vtp_cancel_shipment' => 'cancel_shipment',
-			'epic_vtp_print_label'     => 'print_label',
+			'epic_vtp_get_provinces'       => 'get_provinces',
+			'epic_vtp_get_wards'           => 'get_wards',
+			'epic_vtp_test_connection'     => 'test_connection',
+			'epic_vtp_resolve_address'     => 'resolve_address',
+			'epic_vtp_ship_order'          => 'ship_order',
+			'epic_vtp_cancel_shipment'     => 'cancel_shipment',
+			'epic_vtp_print_label'         => 'print_label',
+			'epic_vtp_set_shipment_status' => 'set_shipment_status',
+			'epic_vtp_bulk_print'          => 'bulk_print',
 		);
 
 		foreach ( $actions as $action => $method ) {
@@ -217,6 +219,29 @@ class Epic_VTP_Ajax {
 			return new WP_Error( 'epic_vtp_already_shipped', __( 'This order already has a ViettelPost shipment.', 'epic-viettelpost-shipping' ) );
 		}
 
+		// Concurrency guard: a rapid double-click (or an order selected in a
+		// bulk run while its own screen is booking) would otherwise create two
+		// ViettelPost shipments. The lock is released in finally, and expires
+		// on its own after a minute if the request dies mid-flight.
+		$lock_key = 'epic_vtp_lock_' . $order->get_id();
+		if ( false !== get_transient( $lock_key ) ) {
+			return new WP_Error( 'epic_vtp_locked', __( 'A booking for this order is already in progress. Please wait a moment and refresh.', 'epic-viettelpost-shipping' ) );
+		}
+		set_transient( $lock_key, 1, MINUTE_IN_SECONDS );
+
+		try {
+			return self::do_book_single_order( $order, $province_id, $province_name );
+		} finally {
+			delete_transient( $lock_key );
+		}
+	}
+
+	/**
+	 * The actual booking — see book_single_order() for the concurrency guard.
+	 *
+	 * @return array|WP_Error
+	 */
+	private static function do_book_single_order( WC_Order $order, $province_id = '', $province_name = '' ) {
 		if ( ! $province_id ) {
 			$resolved = Epic_VTP_Address_Resolver::resolve( $order );
 			if ( ! $resolved['resolved'] ) {
@@ -235,15 +260,22 @@ class Epic_VTP_Ajax {
 		$subtotal = (float) $order->get_subtotal();
 		$total    = (float) $order->get_total();
 
-		// COD orders collect the goods portion only; ViettelPost separately
-		// collects its own shipping fee from the recipient on top of
-		// MONEY_COLLECTION (ORDER_PAYMENT = 2 = goods + fee), so the customer
-		// isn't charged the shipping fee twice.
-		$is_cod          = Epic_VTP_Client::is_cod_order( $order );
-		$shipping_amount = (float) $order->get_shipping_total() + (float) $order->get_shipping_tax();
-		$cod_amount      = $is_cod ? max( 0, $total - $shipping_amount ) : 0;
-		$order_payment   = $is_cod
-			? Epic_VTP_Client::ORDER_PAYMENT_GOODS_AND_FEE
+		// The customer is charged exactly the WooCommerce order total — goods
+		// plus the shipping fee already baked into the order price — so the
+		// amount shown at checkout is the amount collected at the door, with
+		// no courier-recalculated fee added on top (that recomputation is why
+		// the amount actually collected used to differ from the total the
+		// site displayed). Booking as "collect goods only"
+		// (ORDER_PAYMENT = 3) makes ViettelPost bill its own shipping fee to
+		// the sender instead of the recipient, deducted from the COD
+		// remittance: the sender receives the order total minus ViettelPost's
+		// fee, and the shipping component stays inside the order price.
+		// Prepaid (SePay) orders collect nothing (ORDER_PAYMENT = 1); the
+		// sender covers the fee then too.
+		$is_cod        = Epic_VTP_Client::is_cod_order( $order );
+		$cod_amount    = $is_cod ? max( 0, $total ) : 0;
+		$order_payment = $is_cod
+			? Epic_VTP_Client::ORDER_PAYMENT_GOODS_ONLY
 			: Epic_VTP_Client::ORDER_PAYMENT_NONE;
 
 		$phone = $order->get_shipping_phone() ? $order->get_shipping_phone() : $order->get_billing_phone();
@@ -266,11 +298,13 @@ class Epic_VTP_Ajax {
 
 		$services = Epic_VTP_Client::get_price_all_nlp( $price_args );
 		if ( is_wp_error( $services ) ) {
+			self::maybe_hold_on_failure( $order, $services );
 			return $services;
 		}
 
 		$service_code = Epic_VTP_Client::choose_service( $services );
 		if ( is_wp_error( $service_code ) ) {
+			self::maybe_hold_on_failure( $order, $service_code );
 			return $service_code;
 		}
 
@@ -306,6 +340,7 @@ class Epic_VTP_Ajax {
 					$shipment->get_error_message()
 				)
 			);
+			self::maybe_hold_on_failure( $order, $shipment );
 			return $shipment;
 		}
 
@@ -328,11 +363,10 @@ class Epic_VTP_Ajax {
 		$order->add_order_note(
 			$is_cod
 				? sprintf(
-					/* translators: 1: ViettelPost tracking code, 2: COD amount for goods, 3: order total, 4: shipping service code, 5: fee */
-					__( 'ViettelPost shipment booked from wp-admin as COD. Tracking code: %1$s. Amount to collect on delivery: %2$s (goods) -- ViettelPost separately collects its own shipping fee from the recipient; combined with the order total of %3$s. Service: %4$s, estimated fee: %5$s.', 'epic-viettelpost-shipping' ),
+					/* translators: 1: ViettelPost tracking code, 2: amount to collect on delivery (= full order total), 3: shipping service code, 4: fee */
+					__( 'ViettelPost shipment booked from wp-admin as COD. Tracking code: %1$s. Amount to collect on delivery: %2$s (the full order total, shipping included) — this matches the total shown to the customer at checkout. ViettelPost\'s own shipping fee is billed to the sender and deducted from the COD remittance, so it is not added on top of what the customer pays. Service: %3$s, estimated fee: %4$s.', 'epic-viettelpost-shipping' ),
 					$tracking_code,
 					wp_strip_all_tags( wc_price( $cod_amount ) ),
-					wp_strip_all_tags( wc_price( $total ) ),
 					$service_code,
 					wp_strip_all_tags( wc_price( (float) $fee ) )
 				)
@@ -414,12 +448,104 @@ class Epic_VTP_Ajax {
 			wp_send_json_error( array( 'message' => __( 'This order has no ViettelPost shipment to print.', 'epic-viettelpost-shipping' ) ) );
 		}
 
-		$token = Epic_VTP_Client::gen_print_token( array( $tracking_code ) );
-		if ( is_wp_error( $token ) ) {
-			self::send_wp_error( $token );
+		wp_send_json_success( array( 'url' => self::print_url_for( array( $tracking_code ) ) ) );
+	}
+
+	/**
+	 * Builds a (cached) print URL for one or more waybills. ViettelPost's print
+	 * token is valid for a day, so a 10-minute transient cache avoids
+	 * regenerating one for a label that's printed repeatedly.
+	 *
+	 * @param string[] $tracking_codes
+	 * @return string
+	 */
+	private static function print_url_for( array $tracking_codes ) {
+		$settings  = Epic_VTP_Client::get_settings();
+		$cache_key = 'epic_vtp_print_' . md5( implode( ',', $tracking_codes ) . '|' . $settings['label_size'] . '|' . $settings['label_show_postage'] );
+		$token     = get_transient( $cache_key );
+
+		if ( ! is_string( $token ) || '' === $token ) {
+			$token = Epic_VTP_Client::gen_print_token( $tracking_codes );
+			if ( is_wp_error( $token ) ) {
+				return ''; // Caller reports the error.
+			}
+			set_transient( $cache_key, $token, 10 * MINUTE_IN_SECONDS );
 		}
 
-		wp_send_json_success( array( 'url' => Epic_VTP_Client::print_url( $token, '1' ) ) );
+		return Epic_VTP_Client::print_url( $token, $settings['label_size'], 'yes' === $settings['label_show_postage'] );
+	}
+
+	/**
+	 * Manual status override for a booked shipment. ViettelPost exposes no
+	 * status-query API — the webhook is the only inbound channel — so when a
+	 * callback is missed staff can set the last-known status here.
+	 */
+	public static function set_shipment_status() {
+		self::verify_request();
+		$order = self::get_order_or_fail();
+
+		if ( ! $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ) ) {
+			wp_send_json_error( array( 'message' => __( 'This order has no ViettelPost shipment.', 'epic-viettelpost-shipping' ) ) );
+		}
+
+		$status = isset( $_POST['status'] ) ? sanitize_text_field( wp_unslash( $_POST['status'] ) ) : '';
+		if ( ! isset( Epic_VTP_Client::status_map()[ $status ] ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unknown shipment status.', 'epic-viettelpost-shipping' ) ) );
+		}
+
+		$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_STATUS, $status );
+		$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_LAST_SYNCED, current_time( 'mysql' ) );
+		$order->save();
+
+		$order->add_order_note(
+			sprintf(
+				/* translators: 1: status label, 2: raw status code */
+				__( 'ViettelPost status set manually from wp-admin: %1$s (%2$s).', 'epic-viettelpost-shipping' ),
+				Epic_VTP_Client::status_label( $status ),
+				$status
+			)
+		);
+
+		do_action( 'epic_vtp_status_changed', $order, $status, 'manual' );
+
+		wp_send_json_success(
+			array(
+				'status' => $status,
+				'label'  => Epic_VTP_Client::status_label( $status ),
+				'bucket' => Epic_VTP_Client::bucket_status( $status )['css_class'],
+			)
+		);
+	}
+
+	/**
+	 * Builds one print URL for a batch of selected orders' waybills — used by
+	 * the Shipments dashboard's "Print labels" bulk button.
+	 */
+	public static function bulk_print() {
+		self::verify_request();
+
+		$order_ids = isset( $_POST['order_ids'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['order_ids'] ) ) : array();
+		$waybills  = array();
+		foreach ( $order_ids as $order_id ) {
+			$order = wc_get_order( $order_id );
+			if ( $order instanceof WC_Order ) {
+				$waybill = $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+				if ( $waybill ) {
+					$waybills[] = (string) $waybill;
+				}
+			}
+		}
+
+		if ( empty( $waybills ) ) {
+			wp_send_json_error( array( 'message' => __( 'None of the selected orders have a booked shipment.', 'epic-viettelpost-shipping' ) ) );
+		}
+
+		$url = self::print_url_for( $waybills );
+		if ( '' === $url ) {
+			self::send_wp_error( new WP_Error( 'epic_vtp_print', __( 'ViettelPost did not return a print token.', 'epic-viettelpost-shipping' ) ) );
+		}
+
+		wp_send_json_success( array( 'url' => $url, 'count' => count( $waybills ) ) );
 	}
 
 	// ------------------------------------------------------------------
@@ -489,5 +615,26 @@ class Epic_VTP_Ajax {
 			}
 		}
 		return 0;
+	}
+
+	/**
+	 * When the "Hold the order if booking fails" setting is on, moves an order
+	 * to on-hold after a genuine booking failure so it surfaces for manual
+	 * follow-up (the failure note is added separately by book_single_order()).
+	 * Configuration/already-shipped/lock errors are never "held" — those are
+	 * not the courier's fault and would just create noise.
+	 */
+	private static function maybe_hold_on_failure( WC_Order $order, WP_Error $error ) {
+		$settings = Epic_VTP_Client::get_settings();
+		if ( 'yes' !== $settings['hold_on_failure'] ) {
+			return;
+		}
+		if ( in_array( $error->get_error_code(), array( 'epic_vtp_config', 'epic_vtp_already_shipped', 'epic_vtp_locked' ), true ) ) {
+			return;
+		}
+		if ( $order->has_status( 'on-hold' ) ) {
+			return;
+		}
+		$order->update_status( 'on-hold', __( 'ViettelPost booking failed — held for manual handling.', 'epic-viettelpost-shipping' ) );
 	}
 }

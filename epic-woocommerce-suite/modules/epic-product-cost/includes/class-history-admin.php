@@ -30,6 +30,14 @@ class Epic_Product_Cost_History_Admin {
 			$id         = (int) $_GET['id'];
 			$product_id = isset( $_GET['product_id'] ) ? (int) $_GET['product_id'] : 0;
 			check_admin_referer( 'epic_pc_delete_history_' . $id );
+
+			global $wpdb;
+			$table = Epic_Product_Cost_Store::table();
+			$owner = (int) $wpdb->get_var( $wpdb->prepare( "SELECT product_id FROM {$table} WHERE id = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name is internal.
+			if ( $owner && $product_id && $owner !== $product_id ) {
+				wp_die( esc_html__( 'That history entry does not belong to this product.', 'epic-product-cost' ) );
+			}
+
 			Epic_Product_Cost_Store::delete_history_entry( $id );
 			wp_safe_redirect(
 				add_query_arg(

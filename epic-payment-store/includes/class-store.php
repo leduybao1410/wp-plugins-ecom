@@ -74,7 +74,7 @@ CREATE TABLE {$completed_table} (
 				 VALUES (%s, %d, 'pending', %s, %s, %s, NULL)",
 				$order_id,
 				(int) $amount,
-				wp_json_encode( $payload ),
+				self::seal( $payload ),
 				$now,
 				$expires
 			)
@@ -106,7 +106,7 @@ CREATE TABLE {$completed_table} (
 		if ( ! $row ) {
 			return null;
 		}
-		return json_decode( $row['payload'], true );
+		return self::open( $row['payload'] );
 	}
 
 	/**
@@ -137,7 +137,7 @@ CREATE TABLE {$completed_table} (
 			$wpdb->prepare( "SELECT payload FROM {$table} WHERE order_id = %s", $order_id ),
 			ARRAY_A
 		);
-		return $row ? json_decode( $row['payload'], true ) : null;
+		return $row ? self::open( $row['payload'] ) : null;
 	}
 
 	public static function put_completed( $order_id, array $result ) {
@@ -151,7 +151,7 @@ CREATE TABLE {$completed_table} (
 				 (order_id, result, created_at, expires_at)
 				 VALUES (%s, %s, %s, %s)",
 				$order_id,
-				wp_json_encode( $result ),
+				self::seal( $result ),
 				$now,
 				$expires
 			)
@@ -171,7 +171,7 @@ CREATE TABLE {$completed_table} (
 		if ( ! $row ) {
 			return null;
 		}
-		return json_decode( $row['result'], true );
+		return self::open( $row['result'] );
 	}
 
 	/** Table hygiene — deletes rows past their expiry. Not load-bearing (reads already filter on expires_at). */
@@ -179,5 +179,60 @@ CREATE TABLE {$completed_table} (
 		global $wpdb;
 		$wpdb->query( 'DELETE FROM ' . self::pending_table() . ' WHERE expires_at < UTC_TIMESTAMP()' );
 		$wpdb->query( 'DELETE FROM ' . self::completed_table() . ' WHERE expires_at < UTC_TIMESTAMP()' );
+	}
+
+	/**
+	 * Encrypt a payload/result before storage so a database/backup read does
+	 * not expose checkout PII. Uses AES-256-GCM with a key derived from the
+	 * site's secure-auth salt. Falls back to a marked plaintext form only when
+	 * the openssl extension is unavailable.
+	 *
+	 * @param array $data
+	 * @return string
+	 */
+	private static function seal( array $data ) {
+		$json = wp_json_encode( $data );
+		if ( ! function_exists( 'openssl_encrypt' ) ) {
+			return 'plain:' . $json;
+		}
+		$key = hash( 'sha256', wp_salt( 'secure_auth' ), true );
+		$iv  = random_bytes( 12 );
+		$tag = '';
+		$ct  = openssl_encrypt( $json, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag );
+		if ( false === $ct ) {
+			return 'plain:' . $json;
+		}
+		return 'gcm:' . base64_encode( $iv . $tag . $ct );
+	}
+
+	/**
+	 * Reverse seal(). Legacy plaintext rows are returned as-is.
+	 *
+	 * @param string $stored
+	 * @return array|null
+	 */
+	private static function open( $stored ) {
+		$stored = (string) $stored;
+		if ( 0 === strpos( $stored, 'plain:' ) ) {
+			$json = substr( $stored, 6 );
+		} elseif ( 0 === strpos( $stored, 'gcm:' ) ) {
+			$raw = base64_decode( substr( $stored, 4 ), true );
+			if ( false === $raw || strlen( $raw ) < 28 ) {
+				return null;
+			}
+			$iv  = substr( $raw, 0, 12 );
+			$tag = substr( $raw, 12, 16 );
+			$ct  = substr( $raw, 28 );
+			$key = hash( 'sha256', wp_salt( 'secure_auth' ), true );
+			$json = openssl_decrypt( $ct, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag );
+			if ( false === $json ) {
+				return null;
+			}
+		} else {
+			// Legacy plaintext JSON row (stored before encryption was added).
+			$json = $stored;
+		}
+		$data = json_decode( $json, true );
+		return is_array( $data ) ? $data : null;
 	}
 }
