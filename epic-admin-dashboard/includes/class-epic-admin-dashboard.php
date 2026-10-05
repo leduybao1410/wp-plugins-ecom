@@ -781,11 +781,19 @@ final class Epic_Admin_Dashboard {
 		$per_page = min( 100, max( 1, absint( $request->get_param( 'per_page' ) ) ?: 20 ) );
 		$search = sanitize_text_field( (string) $request->get_param( 'search' ) );
 		if ( 'orders' === $resource && function_exists( 'wc_get_orders' ) ) {
-			$args = array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'date', 'order' => 'DESC', 'search' => $search ? '*' . $search . '*' : '' );
 			$status = sanitize_key( (string) $request->get_param( 'status' ) );
-			if ( '' !== $status ) { if ( ! in_array( $status, array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ), true ) ) { return self::error( 'invalid_status', 'Choose a supported order status.' ); } $args['status'] = array( $status ); }
+			if ( '' !== $status && ! in_array( $status, array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ), true ) ) { return self::error( 'invalid_status', 'Choose a supported order status.' ); }
+			if ( '' !== $search && class_exists( 'Epic_Order_Code' ) && preg_match( '/^EPIC-[A-Z0-9]+$/i', trim( $search ) ) ) {
+				$code_id = Epic_Order_Code::decode( $search );
+				$code_order = $code_id ? wc_get_order( $code_id ) : false;
+				if ( $code_order && ( '' === $status || $code_order->get_status() === $status ) ) {
+					return rest_ensure_response( array( 'items' => array( self::order_list_item( $code_order ) ), 'page' => 1, 'per_page' => $per_page, 'total' => 1 ) );
+				}
+			}
+			$args = array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'date', 'order' => 'DESC', 'search' => $search ? '*' . $search . '*' : '' );
+			if ( '' !== $status ) { $args['status'] = array( $status ); }
 			$result = wc_get_orders( $args );
-			$items = array_map( static function ( $order ) { return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => trim( $order->get_formatted_billing_full_name() ), 'email' => $order->get_billing_email(), 'payment_method' => $order->get_payment_method_title(), 'shipping' => $order->get_shipping_method() ); }, $result->orders );
+			$items = array_map( static function ( $order ) { return self::order_list_item( $order ); }, $result->orders );
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => (int) $result->total ) );
 		}
 		if ( 'shipments' === $resource && function_exists( 'wc_get_orders' ) ) {
@@ -795,8 +803,17 @@ final class Epic_Admin_Dashboard {
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => (int) $result->total ) );
 		}
 		if ( 'products' === $resource && function_exists( 'wc_get_products' ) ) {
-			$result = wc_get_products( array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'title', 'order' => 'ASC', 'status' => array( 'publish', 'draft', 'pending', 'private' ), 's' => $search ) );
-			$items = array_map( static function ( $product ) { return array( 'id' => $product->get_id(), 'name' => $product->get_name(), 'type' => $product->get_type(), 'status' => $product->get_status(), 'sku' => $product->get_sku(), 'price' => $product->get_price(), 'stock' => $product->get_stock_status(), 'stock_quantity' => $product->get_stock_quantity() ); }, $result->products );
+			$product_statuses = array( 'publish', 'draft', 'pending', 'private' );
+			if ( '' !== $search ) {
+				$by_name = wc_get_products( array( 'limit' => -1, 'return' => 'ids', 'status' => $product_statuses, 's' => $search ) );
+				$by_sku = get_posts( array( 'post_type' => 'product', 'post_status' => $product_statuses, 'posts_per_page' => -1, 'fields' => 'ids', 'meta_query' => array( array( 'key' => '_sku', 'value' => $search, 'compare' => 'LIKE' ) ) ) );
+				$ids = array_values( array_unique( array_merge( array_map( 'intval', (array) $by_name ), array_map( 'intval', (array) $by_sku ) ) ) );
+				$items = array();
+				foreach ( array_slice( $ids, ( $page - 1 ) * $per_page, $per_page ) as $product_id ) { $product = wc_get_product( $product_id ); if ( $product ) { $items[] = self::product_list_item( $product ); } }
+				return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => count( $ids ) ) );
+			}
+			$result = wc_get_products( array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'title', 'order' => 'ASC', 'status' => $product_statuses ) );
+			$items = array_map( static function ( $product ) { return self::product_list_item( $product ); }, $result->products );
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => (int) $result->total ) );
 		}
 		if ( 'customers' === $resource && function_exists( 'wc_get_customers' ) ) {
@@ -829,6 +846,14 @@ final class Epic_Admin_Dashboard {
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => Epic_Distributor_Profit_Store::count_entries( $args ), 'totals' => Epic_Distributor_Profit_Store::totals( $args ) ) );
 		}
 		return self::custom_records( $resource, $request, $page, $per_page, $search );
+	}
+
+	private static function order_list_item( $order ) {
+		return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => trim( $order->get_formatted_billing_full_name() ), 'email' => $order->get_billing_email(), 'payment_method' => $order->get_payment_method_title(), 'shipping' => $order->get_shipping_method() );
+	}
+
+	private static function product_list_item( $product ) {
+		return array( 'id' => $product->get_id(), 'name' => $product->get_name(), 'type' => $product->get_type(), 'status' => $product->get_status(), 'sku' => $product->get_sku(), 'price' => $product->get_price(), 'stock' => $product->get_stock_status(), 'stock_quantity' => $product->get_stock_quantity() );
 	}
 
 	private static function custom_records( $resource, $request, $page, $per_page, $search ) {
