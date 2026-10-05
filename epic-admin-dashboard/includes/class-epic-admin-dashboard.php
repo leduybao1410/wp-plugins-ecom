@@ -7,6 +7,12 @@ final class Epic_Admin_Dashboard {
 	const SESSION_TTL = 28800;
 	const IDLE_TTL = 1800;
 	const RESOURCES = array( 'orders', 'shipments', 'products', 'customers', 'content', 'leads', 'reviews', 'wholesale-orders', 'costs', 'distributors', 'coupons', 'newsletter', 'ledger' );
+	const SOURCE_DIRECT = 'direct';
+	const META_SOURCE = '_epic_order_source';
+	const META_FULFILLMENT = '_epic_fulfillment';
+	const META_CREATED_BY = '_epic_created_by';
+	const DIRECT_ORDER_FULFILLMENTS = array( 'courier', 'self' );
+	const DIRECT_ORDER_PREVIEW_TTL = 900;
 
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
@@ -68,6 +74,10 @@ final class Epic_Admin_Dashboard {
 		register_rest_route( self::NS, '/newsletter/campaigns/(?P<id>\d+)/send', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'newsletter_send' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/records/(?P<resource>[a-z-]+)', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'records' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ), 'args' => array( 'resource' => array( 'validate_callback' => static function ( $value ) { return in_array( $value, self::RESOURCES, true ); } ) ) ) );
 		register_rest_route( self::NS, '/records/(?P<resource>[a-z-]+)/(?P<id>\d+)', array( 'methods' => array( 'GET', 'PATCH', 'DELETE' ), 'callback' => array( __CLASS__, 'record' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/address/provinces', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'address_provinces' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/address/wards', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'address_wards' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/orders/preview', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'order_preview' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/orders/apply', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'order_apply' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 	}
 
 	public static function create_grant( $request ) {
@@ -757,6 +767,329 @@ final class Epic_Admin_Dashboard {
 		return rest_ensure_response( array( 'ok' => true, 'coupon' => self::coupon_data( new WC_Coupon( $id ) ) ) );
 	}
 
+	public static function address_provinces( $request ) {
+		if ( ! class_exists( 'Epic_VTP_Client' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
+		$provinces = Epic_VTP_Client::get_provinces_new();
+		if ( is_wp_error( $provinces ) ) { return self::error( 'address_unavailable', 'ViettelPost province data is unavailable.', 503 ); }
+		$items = array();
+		foreach ( (array) $provinces as $province ) {
+			if ( ! is_array( $province ) || ! isset( $province['PROVINCE_ID'], $province['PROVINCE_NAME'] ) ) { continue; }
+			$items[] = array( 'id' => (string) $province['PROVINCE_ID'], 'name' => (string) $province['PROVINCE_NAME'] );
+		}
+		return rest_ensure_response( array( 'items' => $items ) );
+	}
+
+	public static function address_wards( $request ) {
+		if ( ! class_exists( 'Epic_VTP_Client' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
+		$province_id = absint( $request->get_param( 'province_id' ) );
+		if ( $province_id < 1 ) { return self::error( 'province_required', 'Choose a province before loading wards.' ); }
+		$wards = Epic_VTP_Client::get_wards_new( $province_id );
+		if ( is_wp_error( $wards ) ) { return self::error( 'address_unavailable', 'ViettelPost ward data is unavailable.', 503 ); }
+		$items = array();
+		foreach ( (array) $wards as $ward ) {
+			if ( ! is_array( $ward ) || ! isset( $ward['WARDS_ID'], $ward['WARDS_NAME'] ) ) { continue; }
+			$items[] = array( 'id' => (string) $ward['WARDS_ID'], 'name' => (string) $ward['WARDS_NAME'] );
+		}
+		return rest_ensure_response( array( 'items' => $items ) );
+	}
+
+	private static function can_manage_direct_orders() {
+		return current_user_can( 'edit_shop_orders' ) || current_user_can( 'manage_woocommerce' );
+	}
+
+	private static function is_direct_order( $order ) {
+		return self::SOURCE_DIRECT === (string) $order->get_meta( self::META_SOURCE );
+	}
+
+	public static function order_preview( $request ) {
+		if ( ! self::can_manage_direct_orders() ) { return self::error( 'forbidden', 'You cannot create direct orders.', 403 ); }
+		if ( ! class_exists( 'WooCommerce' ) || ! function_exists( 'wc_get_product' ) ) { return self::error( 'woocommerce_unavailable', 'WooCommerce is unavailable.', 503 ); }
+		$body = $request->get_json_params();
+		$draft = self::normalize_order_draft( is_array( $body ) ? $body : array() );
+		if ( is_wp_error( $draft ) ) { return $draft; }
+		$computed = self::compute_direct_order( $draft );
+		if ( is_wp_error( $computed ) ) { return $computed; }
+		$token = rtrim( strtr( base64_encode( random_bytes( 32 ) ), '+/', '-_' ), '=' );
+		set_transient( 'epic_admin_order_draft_' . $token, array( 'user_id' => get_current_user_id(), 'draft' => $draft ), self::DIRECT_ORDER_PREVIEW_TTL );
+		$response = array(
+			'preview_token' => $token,
+			'action' => $draft['action'],
+			'items' => $computed['items'],
+			'totals' => $computed['totals'],
+			'warnings' => $computed['warnings'],
+			'customer' => $draft['customer'],
+			'fulfillment' => $draft['fulfillment'],
+		);
+		if ( 'update' === $draft['action'] ) { $response['order_id'] = (int) $draft['order_id']; }
+		return rest_ensure_response( $response );
+	}
+
+	public static function order_apply( $request ) {
+		if ( ! self::can_manage_direct_orders() ) { return self::error( 'forbidden', 'You cannot create direct orders.', 403 ); }
+		if ( ! class_exists( 'WooCommerce' ) || ! function_exists( 'wc_get_product' ) ) { return self::error( 'woocommerce_unavailable', 'WooCommerce is unavailable.', 503 ); }
+		$body = $request->get_json_params();
+		$token = isset( $body['preview_token'] ) ? (string) $body['preview_token'] : '';
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,100}$/', $token ) ) { return self::error( 'preview_required', 'Review the order before saving it.', 400 ); }
+		$stored = get_transient( 'epic_admin_order_draft_' . $token );
+		if ( ! is_array( $stored ) || (int) $stored['user_id'] !== get_current_user_id() || empty( $stored['draft'] ) || ! is_array( $stored['draft'] ) ) { return self::error( 'preview_expired', 'This order preview expired. Review the order again.', 409 ); }
+		delete_transient( 'epic_admin_order_draft_' . $token );
+		$draft = $stored['draft'];
+		$computed = self::compute_direct_order( $draft );
+		if ( is_wp_error( $computed ) ) { return $computed; }
+		$reservation = self::reserve_mutation( $request, 'update' === $draft['action'] ? 'order-direct-update:' . absint( $draft['order_id'] ) : 'order-direct-create' );
+		if ( is_wp_error( $reservation ) ) { return $reservation; }
+		if ( isset( $reservation['replay'] ) ) { return rest_ensure_response( $reservation['replay'] ); }
+		$result = 'update' === $draft['action'] ? self::update_direct_order_from_draft( $draft, $computed ) : self::create_direct_order_from_draft( $draft, $computed );
+		if ( is_wp_error( $result ) ) { self::finish_mutation( $reservation['hash'], 'failed', null ); return $result; }
+		self::finish_mutation( $reservation['hash'], 'success', $result );
+		return rest_ensure_response( $result );
+	}
+
+	private static function normalize_order_draft( $body ) {
+		$action = isset( $body['action'] ) && 'update' === $body['action'] ? 'update' : 'create';
+		$order_id = 0; $expected_revision = '';
+		if ( 'update' === $action ) {
+			$order_id = absint( $body['order_id'] ?? 0 );
+			$order = $order_id ? wc_get_order( $order_id ) : false;
+			if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
+			if ( ! self::is_direct_order( $order ) ) { return self::error( 'not_direct_order', 'Only orders created from the direct-order form can be edited here.', 403 ); }
+			$expected_revision = isset( $body['expected_revision'] ) ? (string) $body['expected_revision'] : '';
+			if ( '' === $expected_revision || ! hash_equals( self::order_revision( $order ), $expected_revision ) ) { return self::error( 'revision_conflict', 'This order changed after you opened it. Reload before saving.', 409 ); }
+		}
+		$input = isset( $body['customer'] ) && is_array( $body['customer'] ) ? $body['customer'] : array();
+		$first_name = sanitize_text_field( (string) ( $input['first_name'] ?? '' ) );
+		$last_name = sanitize_text_field( (string) ( $input['last_name'] ?? '' ) );
+		$phone = trim( sanitize_text_field( (string) ( $input['phone'] ?? '' ) ) );
+		$email = isset( $input['email'] ) ? sanitize_email( (string) $input['email'] ) : '';
+		$address_1 = sanitize_text_field( (string) ( $input['address_1'] ?? '' ) );
+		$address_2 = sanitize_text_field( (string) ( $input['address_2'] ?? '' ) );
+		$province_name = sanitize_text_field( (string) ( $input['province_name'] ?? $input['city'] ?? '' ) );
+		$province_id = absint( $input['province_id'] ?? 0 );
+		$ward_id = absint( $input['ward_id'] ?? 0 );
+		$postcode = sanitize_text_field( (string) ( $input['postcode'] ?? '' ) );
+		if ( '' === trim( $first_name . ' ' . $last_name ) ) { return self::error( 'customer_name_required', 'Enter the customer name.' ); }
+		if ( ! preg_match( '/^[0-9+().\-\s]{8,20}$/', $phone ) ) { return self::error( 'customer_phone_required', 'Enter a valid customer phone number.' ); }
+		if ( '' !== $email && ! is_email( $email ) ) { return self::error( 'customer_email_invalid', 'Enter a valid email address or leave it blank.' ); }
+		if ( '' === $address_1 ) { return self::error( 'address_required', 'Enter the street address.' ); }
+		if ( '' === $province_name ) { return self::error( 'province_required', 'Choose the province/city.' ); }
+		$fulfillment = isset( $body['fulfillment'] ) && in_array( $body['fulfillment'], self::DIRECT_ORDER_FULFILLMENTS, true ) ? (string) $body['fulfillment'] : 'courier';
+		$shipping_fee = isset( $body['shipping_fee'] ) ? (float) $body['shipping_fee'] : 0.0;
+		if ( $shipping_fee < 0 || $shipping_fee > 100000000 ) { return self::error( 'invalid_shipping_fee', 'Shipping fee must be between 0 and 100,000,000.' ); }
+		if ( 'self' === $fulfillment ) { $shipping_fee = 0.0; }
+		$raw_items = isset( $body['items'] ) && is_array( $body['items'] ) ? $body['items'] : array();
+		if ( ! $raw_items || count( $raw_items ) > 50 ) { return self::error( 'items_required', 'Add between 1 and 50 products to the order.' ); }
+		$items = array();
+		foreach ( $raw_items as $raw ) {
+			if ( ! is_array( $raw ) ) { continue; }
+			$product_id = absint( $raw['product_id'] ?? 0 );
+			$variation_id = absint( $raw['variation_id'] ?? 0 );
+			$quantity = absint( $raw['quantity'] ?? 0 );
+			if ( $product_id < 1 || $quantity < 1 || $quantity > 10000 ) { return self::error( 'invalid_item', 'Each line needs a product and a quantity between 1 and 10,000.' ); }
+			$unit_price = isset( $raw['unit_price'] ) && '' !== $raw['unit_price'] ? (float) $raw['unit_price'] : null;
+			if ( null !== $unit_price && ( $unit_price < 0 || $unit_price > 1000000000 ) ) { return self::error( 'invalid_price', 'Line prices must be between 0 and 1,000,000,000.' ); }
+			$reason = isset( $raw['override_reason'] ) ? sanitize_text_field( (string) $raw['override_reason'] ) : '';
+			if ( strlen( $reason ) > 500 ) { return self::error( 'invalid_reason', 'Price override reasons must be under 500 characters.' ); }
+			$items[] = array( 'product_id' => $product_id, 'variation_id' => $variation_id, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => $reason );
+		}
+		if ( ! $items ) { return self::error( 'items_required', 'Add between 1 and 50 products to the order.' ); }
+		$coupon_codes = array();
+		if ( isset( $body['coupon_codes'] ) && is_array( $body['coupon_codes'] ) ) {
+			foreach ( array_slice( array_values( $body['coupon_codes'] ), 0, 10 ) as $code ) { $code = function_exists( 'wc_format_coupon_code' ) ? wc_format_coupon_code( wc_clean( (string) $code ) ) : sanitize_text_field( (string) $code ); if ( '' !== $code ) { $coupon_codes[] = $code; } }
+		}
+		$manual_discount = null;
+		if ( isset( $body['manual_discount'] ) && is_array( $body['manual_discount'] ) && ! empty( $body['manual_discount']['enabled'] ) ) {
+			$type = isset( $body['manual_discount']['type'] ) && 'percent' === $body['manual_discount']['type'] ? 'percent' : 'fixed';
+			$value = (float) ( $body['manual_discount']['value'] ?? 0 );
+			$reason = sanitize_text_field( (string) ( $body['manual_discount']['reason'] ?? '' ) );
+			if ( $value < 0 || ( 'percent' === $type && $value > 100 ) ) { return self::error( 'invalid_manual_discount', 'Enter a discount between 0 and 100 percent, or a non-negative amount.' ); }
+			if ( '' === $reason ) { return self::error( 'manual_discount_reason_required', 'Provide a reason for the manual discount.' ); }
+			if ( strlen( $reason ) > 500 ) { return self::error( 'invalid_reason', 'Discount reasons must be under 500 characters.' ); }
+			$manual_discount = array( 'type' => $type, 'value' => $value, 'reason' => $reason );
+		}
+		$fee_lines = array();
+		if ( isset( $body['fee_lines'] ) && is_array( $body['fee_lines'] ) ) {
+			foreach ( array_slice( array_values( $body['fee_lines'] ), 0, 20 ) as $line ) {
+				if ( ! is_array( $line ) ) { continue; }
+				$name = sanitize_text_field( (string) ( $line['name'] ?? '' ) );
+				$amount = (float) ( $line['amount'] ?? 0 );
+				if ( '' === $name || $amount < 0 || $amount > 100000000 ) { return self::error( 'invalid_fee', 'Each fee needs a name and a non-negative amount.' ); }
+				$fee_lines[] = array( 'name' => $name, 'amount' => $amount );
+			}
+		}
+		$note = isset( $body['note'] ) ? sanitize_textarea_field( (string) $body['note'] ) : '';
+		if ( strlen( $note ) > 4000 ) { return self::error( 'invalid_note', 'Order notes must be under 4,000 characters.' ); }
+		return array(
+			'action' => $action, 'order_id' => $order_id, 'expected_revision' => $expected_revision,
+			'customer' => array( 'first_name' => $first_name, 'last_name' => $last_name, 'phone' => $phone, 'email' => $email, 'address_1' => $address_1, 'address_2' => $address_2, 'province_id' => $province_id, 'province_name' => $province_name, 'ward_id' => $ward_id, 'postcode' => $postcode ),
+			'fulfillment' => $fulfillment, 'shipping_fee' => $shipping_fee, 'items' => $items, 'coupon_codes' => $coupon_codes,
+			'manual_discount' => $manual_discount, 'fee_lines' => $fee_lines, 'note' => $note,
+		);
+	}
+
+	private static function resolve_direct_item_product( $line, &$warnings ) {
+		$product = wc_get_product( $line['variation_id'] ? $line['variation_id'] : $line['product_id'] );
+		if ( ! $product ) { return self::error( 'product_not_found', 'One of the selected products no longer exists.' ); }
+		if ( $line['variation_id'] ) {
+			if ( ! $product->is_type( 'variation' ) || (int) $product->get_parent_id() !== (int) $line['product_id'] ) { return self::error( 'invalid_variation', 'A selected variation does not belong to its product.' ); }
+		} elseif ( $product->is_type( 'variable' ) ) {
+			return self::error( 'variation_required', sprintf( 'Choose a variation for "%s".', $product->get_name() ) );
+		}
+		if ( ! $product->is_purchasable() ) { $warnings[] = sprintf( 'Sản phẩm "%s" hiện không thể bán.', $product->get_name() ); }
+		return $product;
+	}
+
+	private static function compute_direct_order( $draft ) {
+		$order = new WC_Order();
+		$order->set_currency( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'VND' );
+		$customer = $draft['customer'];
+		$order->set_billing_email( $customer['email'] );
+		$order->set_billing_phone( $customer['phone'] );
+		$order->set_billing_first_name( $customer['first_name'] );
+		$order->set_billing_last_name( $customer['last_name'] );
+		$resolved = array(); $subtotal = 0.0; $warnings = array();
+		foreach ( $draft['items'] as $line ) {
+			$product = self::resolve_direct_item_product( $line, $warnings );
+			if ( is_wp_error( $product ) ) { return $product; }
+			$catalog = (float) $product->get_price();
+			$unit_price = null === $line['unit_price'] ? $catalog : (float) $line['unit_price'];
+			$line_total = $unit_price * $line['quantity'];
+			$subtotal += $line_total;
+			$item = new WC_Order_Item_Product();
+			$item->set_product( $product );
+			$item->set_quantity( $line['quantity'] );
+			$item->set_subtotal( $line_total );
+			$item->set_total( $line_total );
+			$order->add_item( $item );
+			$resolved[] = array( 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'name' => $product->get_name(), 'sku' => $product->get_sku(), 'quantity' => $line['quantity'], 'unit_price' => $unit_price, 'catalog_price' => $catalog, 'line_total' => $line_total, 'override_reason' => $line['override_reason'] );
+			if ( null !== $line['unit_price'] && abs( $line['unit_price'] - $catalog ) > 0.0001 ) { $warnings[] = sprintf( 'Giá dòng "%s" đã được sửa so với giá niêm yết %s.', $product->get_name(), wp_strip_all_tags( wc_price( $catalog ) ) ); }
+			if ( ! $product->is_in_stock() && ! $product->backorders_allowed() ) { $warnings[] = sprintf( 'Sản phẩm "%s" đang hết hàng.', $product->get_name() ); }
+		}
+		$coupon_total = 0.0;
+		if ( $draft['coupon_codes'] && class_exists( 'WC_Discounts' ) ) {
+			$discounts = new WC_Discounts( $order );
+			foreach ( $draft['coupon_codes'] as $code ) {
+				$coupon = new WC_Coupon( $code );
+				if ( ! $coupon->get_id() ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s" does not exist.', $code ) ); }
+				$valid = $discounts->is_coupon_valid( $coupon );
+				if ( is_wp_error( $valid ) ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s": %s', $code, $valid->get_error_message() ) ); }
+				$discounts->apply_coupon( $coupon );
+				if ( $coupon->get_free_shipping() ) { $warnings[] = sprintf( 'Coupon "%s" miễn phí vận chuyển không được áp dụng cho đơn trực tiếp.', $code ); }
+			}
+			$coupon_total = (float) $discounts->get_discount_total();
+		}
+		$base = max( 0.0, $subtotal - $coupon_total );
+		$manual_total = 0.0;
+		if ( is_array( $draft['manual_discount'] ) ) {
+			$manual = $draft['manual_discount'];
+			$manual_total = 'percent' === $manual['type'] ? ( $base * $manual['value'] / 100 ) : (float) $manual['value'];
+			if ( $manual_total > $base ) { $manual_total = $base; $warnings[] = 'Giảm giá thủ công đã được giới hạn theo giá trị còn lại của đơn.'; }
+			$manual_total = max( 0.0, $manual_total );
+		}
+		$fees_total = 0.0;
+		foreach ( $draft['fee_lines'] as $fee ) { $fees_total += (float) $fee['amount']; }
+		$shipping_fee = 'self' === $draft['fulfillment'] ? 0.0 : (float) $draft['shipping_fee'];
+		$total = max( 0.0, $subtotal - $coupon_total - $manual_total + $shipping_fee + $fees_total );
+		return array(
+			'items' => $resolved,
+			'warnings' => $warnings,
+			'totals' => array( 'subtotal' => $subtotal, 'coupon_discount' => $coupon_total, 'manual_discount' => $manual_total, 'shipping' => $shipping_fee, 'fees' => $fees_total, 'total' => $total, 'currency' => $order->get_currency() ),
+		);
+	}
+
+	private static function fill_direct_order( $order, $draft, $computed ) {
+		$customer = $draft['customer'];
+		$address = array( 'first_name' => $customer['first_name'], 'last_name' => $customer['last_name'], 'address_1' => $customer['address_1'], 'address_2' => $customer['address_2'], 'city' => $customer['province_name'], 'state' => $customer['province_name'], 'postcode' => $customer['postcode'], 'country' => 'VN', 'phone' => $customer['phone'], 'email' => $customer['email'] );
+		$order->set_address( $address, 'billing' );
+		$order->set_address( $address, 'shipping' );
+		if ( is_callable( array( $order, 'set_shipping_phone' ) ) ) { $order->set_shipping_phone( $customer['phone'] ); }
+		if ( '' !== $customer['email'] && function_exists( 'email_exists' ) ) {
+			$user_id = email_exists( $customer['email'] );
+			if ( ! $user_id && function_exists( 'wc_create_new_customer' ) ) {
+				$suppress = static function () { return false; };
+				add_filter( 'woocommerce_email_enabled_customer_new_account', $suppress );
+				$user_id = wc_create_new_customer( $customer['email'], '', '', array( 'first_name' => $customer['first_name'], 'last_name' => $customer['last_name'] ) );
+				remove_filter( 'woocommerce_email_enabled_customer_new_account', $suppress );
+				if ( is_wp_error( $user_id ) ) { $user_id = 0; }
+			}
+			if ( $user_id ) { $order->set_customer_id( (int) $user_id ); }
+		}
+		foreach ( $order->get_items( array( 'line_item', 'fee', 'shipping', 'coupon' ) ) as $item_id => $item ) { $order->remove_item( $item_id ); }
+		$discard = array();
+		foreach ( $computed['items'] as $line ) {
+			$product = self::resolve_direct_item_product( array( 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'unit_price' => $line['unit_price'] ), $discard );
+			if ( is_wp_error( $product ) ) { return $product; }
+			$item = new WC_Order_Item_Product();
+			$item->set_product( $product );
+			$item->set_quantity( $line['quantity'] );
+			$item->set_subtotal( $line['line_total'] );
+			$item->set_total( $line['line_total'] );
+			if ( '' !== $line['override_reason'] ) { $item->add_meta_data( '_epic_price_override_reason', $line['override_reason'] ); }
+			$order->add_item( $item );
+		}
+		foreach ( $draft['coupon_codes'] as $code ) {
+			$applied = $order->apply_coupon( $code );
+			if ( is_wp_error( $applied ) ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s": %s', $code, $applied->get_error_message() ) ); }
+		}
+		if ( $computed['totals']['manual_discount'] > 0 && is_array( $draft['manual_discount'] ) ) {
+			$amount = -1 * (float) $computed['totals']['manual_discount'];
+			$fee = new WC_Order_Item_Fee();
+			$fee->set_name( 'Giảm giá: ' . $draft['manual_discount']['reason'] );
+			$fee->set_amount( $amount );
+			$fee->set_total( $amount );
+			$order->add_item( $fee );
+		}
+		foreach ( $draft['fee_lines'] as $line ) {
+			$fee = new WC_Order_Item_Fee();
+			$fee->set_name( $line['name'] );
+			$fee->set_amount( (float) $line['amount'] );
+			$fee->set_total( (float) $line['amount'] );
+			$order->add_item( $fee );
+		}
+		$shipping = new WC_Order_Item_Shipping();
+		$shipping->set_method_title( 'self' === $draft['fulfillment'] ? 'Nhân viên giao trực tiếp' : 'Giao hàng (ViettelPost)' );
+		$shipping->set_method_id( 'self' === $draft['fulfillment'] ? 'epic_self_delivery' : 'epic_courier' );
+		$shipping->set_total( (float) $computed['totals']['shipping'] );
+		$order->add_item( $shipping );
+		$order->set_payment_method( 'cod' );
+		$order->set_payment_method_title( 'Thanh toán khi nhận hàng (COD)' );
+		$order->set_paid( false );
+		$order->update_meta_data( self::META_SOURCE, self::SOURCE_DIRECT );
+		$order->update_meta_data( self::META_FULFILLMENT, $draft['fulfillment'] );
+		$order->update_meta_data( self::META_CREATED_BY, get_current_user_id() );
+		if ( $customer['province_id'] ) { $order->update_meta_data( '_epic_vtp_province_id', $customer['province_id'] ); }
+		if ( $customer['ward_id'] ) { $order->update_meta_data( '_epic_ward_id', $customer['ward_id'] ); }
+		$order->calculate_totals();
+		$order->save();
+		$notes = array( 'Tạo từ EPIC Admin — đơn trực tiếp (điện thoại/Zalo).' );
+		if ( is_array( $draft['manual_discount'] ) ) { $notes[] = 'Giảm giá thủ công: ' . $draft['manual_discount']['reason']; }
+		foreach ( $computed['items'] as $line ) { if ( '' !== $line['override_reason'] ) { $notes[] = sprintf( 'Sửa giá "%s": %s', $line['name'], $line['override_reason'] ); } }
+		if ( '' !== $draft['note'] ) { $notes[] = $draft['note']; }
+		$order->add_order_note( implode( "\n", $notes ) );
+		return true;
+	}
+
+	private static function create_direct_order_from_draft( $draft, $computed ) {
+		$order = wc_create_order( array( 'created_via' => 'epic-admin' ) );
+		if ( is_wp_error( $order ) ) { return self::error( 'order_create_failed', 'The order could not be created.', 500 ); }
+		$result = self::fill_direct_order( $order, $draft, $computed );
+		if ( is_wp_error( $result ) ) { $order->delete( true ); return $result; }
+		$order->update_status( 'on-hold', 'Tạo đơn trực tiếp (điện thoại/Zalo) từ EPIC Admin.' );
+		if ( function_exists( 'wc_reduce_stock_levels' ) ) { wc_reduce_stock_levels( $order->get_id() ); }
+		self::log( 'order.create', 'orders', (string) $order->get_id(), array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
+		return array( 'ok' => true, 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
+	}
+
+	private static function update_direct_order_from_draft( $draft, $computed ) {
+		$order = wc_get_order( $draft['order_id'] );
+		if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
+		if ( ! self::is_direct_order( $order ) ) { return self::error( 'not_direct_order', 'Only direct orders can be edited here.', 403 ); }
+		if ( ! hash_equals( self::order_revision( $order ), (string) $draft['expected_revision'] ) ) { return self::error( 'revision_conflict', 'This order changed after you opened it. Reload before saving.', 409 ); }
+		$result = self::fill_direct_order( $order, $draft, $computed );
+		if ( is_wp_error( $result ) ) { return $result; }
+		self::log( 'order.update', 'orders', (string) $order->get_id(), array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
+		return array( 'ok' => true, 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
+	}
+
 	private static function finance_filters( $request ) {
 		$from = sanitize_text_field( (string) $request->get_param( 'from' ) );
 		$to = sanitize_text_field( (string) $request->get_param( 'to' ) );
@@ -783,15 +1116,18 @@ final class Epic_Admin_Dashboard {
 		if ( 'orders' === $resource && function_exists( 'wc_get_orders' ) ) {
 			$status = sanitize_key( (string) $request->get_param( 'status' ) );
 			if ( '' !== $status && ! in_array( $status, array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ), true ) ) { return self::error( 'invalid_status', 'Choose a supported order status.' ); }
+			$source = sanitize_key( (string) $request->get_param( 'source' ) );
+			if ( '' !== $source && ! in_array( $source, array( self::SOURCE_DIRECT ), true ) ) { return self::error( 'invalid_source', 'Choose a supported order source.' ); }
 			if ( '' !== $search && class_exists( 'Epic_Order_Code' ) && preg_match( '/^EPIC-[A-Z0-9]+$/i', trim( $search ) ) ) {
 				$code_id = Epic_Order_Code::decode( $search );
 				$code_order = $code_id ? wc_get_order( $code_id ) : false;
-				if ( $code_order && ( '' === $status || $code_order->get_status() === $status ) ) {
+				if ( $code_order && ( '' === $status || $code_order->get_status() === $status ) && ( '' === $source || $code_order->get_meta( self::META_SOURCE ) === $source ) ) {
 					return rest_ensure_response( array( 'items' => array( self::order_list_item( $code_order ) ), 'page' => 1, 'per_page' => $per_page, 'total' => 1 ) );
 				}
 			}
 			$args = array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'date', 'order' => 'DESC', 'search' => $search ? '*' . $search . '*' : '' );
 			if ( '' !== $status ) { $args['status'] = array( $status ); }
+			if ( '' !== $source ) { $args['meta_query'] = array( array( 'key' => self::META_SOURCE, 'value' => $source ) ); }
 			$result = wc_get_orders( $args );
 			$items = array_map( static function ( $order ) { return self::order_list_item( $order ); }, $result->orders );
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => (int) $result->total ) );
@@ -799,7 +1135,7 @@ final class Epic_Admin_Dashboard {
 		if ( 'shipments' === $resource && function_exists( 'wc_get_orders' ) ) {
 			if ( ! class_exists( 'Epic_VTP_Order_Meta_Box' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
 			$result = wc_get_orders( array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'date', 'order' => 'DESC', 'meta_query' => array( array( 'key' => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, 'compare' => 'EXISTS' ) ), 'search' => $search ? '*' . $search . '*' : '' ) );
-			$items = array_map( static function ( $order ) { return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'customer' => $order->get_formatted_billing_full_name(), 'tracking' => $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ), 'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ), 'shipping' => $order->get_shipping_method() ); }, $result->orders );
+			$items = array_map( static function ( $order ) { $tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ); return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => $order->get_formatted_billing_full_name(), 'tracking' => $tracking, 'tracking_url' => self::shipment_tracking_url( $tracking ), 'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ), 'shipping' => $order->get_shipping_method() ); }, $result->orders );
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => (int) $result->total ) );
 		}
 		if ( 'products' === $resource && function_exists( 'wc_get_products' ) ) {
@@ -849,7 +1185,7 @@ final class Epic_Admin_Dashboard {
 	}
 
 	private static function order_list_item( $order ) {
-		return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => trim( $order->get_formatted_billing_full_name() ), 'email' => $order->get_billing_email(), 'payment_method' => $order->get_payment_method_title(), 'shipping' => $order->get_shipping_method() );
+		return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => trim( $order->get_formatted_billing_full_name() ), 'email' => $order->get_billing_email(), 'payment_method' => $order->get_payment_method_title(), 'shipping' => $order->get_shipping_method(), 'source' => (string) $order->get_meta( self::META_SOURCE ) );
 	}
 
 	private static function product_list_item( $product ) {
@@ -962,7 +1298,11 @@ final class Epic_Admin_Dashboard {
 					'paid_at' => $order->get_date_paid() ? $order->get_date_paid()->date( DATE_ATOM ) : null,
 					'billing' => $order->get_address( 'billing' ),
 					'shipping' => $order->get_address( 'shipping' ),
-					'items' => array_map( static function ( $item ) { $product = $item->get_product(); return array( 'product_id' => $item->get_product_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'total' => $item->get_total() ); }, $order->get_items() ),
+					'source' => (string) $order->get_meta( self::META_SOURCE ),
+					'fulfillment' => (string) $order->get_meta( self::META_FULFILLMENT ),
+					'shipping_fee' => $order->get_shipping_total(),
+					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
+					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
 					'revision' => self::order_revision( $order ),
 				) );
@@ -990,16 +1330,36 @@ final class Epic_Admin_Dashboard {
 			$order = wc_get_order( $id );
 			if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
 			if ( ! current_user_can( 'edit_shop_order', $id ) && ! current_user_can( 'manage_woocommerce' ) ) { return self::error( 'forbidden', 'You cannot view this shipment.', 403 ); }
+			$tracking        = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+			$recipient_name  = $order->get_formatted_shipping_full_name() ? $order->get_formatted_shipping_full_name() : $order->get_formatted_billing_full_name();
+			$recipient_phone = $order->get_shipping_phone() ? $order->get_shipping_phone() : $order->get_billing_phone();
 			return rest_ensure_response( array(
 				'id' => $id,
 				'number' => $order->get_order_number(),
-				'tracking' => $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ),
+				'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null,
 				'status' => $order->get_status(),
+				'total' => $order->get_total(),
+				'currency' => $order->get_currency(),
+				'payment_method' => $order->get_payment_method_title(),
+				'shipping_method' => $order->get_shipping_method(),
+				'is_cod' => class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::is_cod_order( $order ) : false,
+				'tracking' => $tracking,
+				'tracking_url' => self::shipment_tracking_url( $tracking ),
+				'tracking_history' => self::shipment_tracking_history( $order ),
 				'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ),
 				'shipment_status_code' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ),
 				'status_options' => Epic_VTP_Client::status_map(),
+				'status_date' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS_DATE ),
 				'expected_delivery' => $order->get_meta( Epic_VTP_Order_Meta_Box::META_EXPECTED ),
-				'shipping_fee' => $order->get_meta( Epic_VTP_Order_Meta_Box::META_FEE ),
+				'last_synced' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_LAST_SYNCED ),
+				'service' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_SERVICE ),
+				'province' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_PROVINCE_NAME ),
+				'cod_amount' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT ),
+				'courier_fee' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_FEE ),
+				'quoted_shipping' => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+				'needs_action' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION ),
+				'recipient_name' => $recipient_name,
+				'recipient_phone' => $recipient_phone,
 				'billing' => $order->get_address( 'billing' ),
 				'shipping' => $order->get_address( 'shipping' ),
 				'reconciliation' => self::shipment_reconciliation_state( $id ),
@@ -1159,6 +1519,62 @@ final class Epic_Admin_Dashboard {
 		global $wpdb;
 		$table = $wpdb->prefix . sanitize_key( $suffix );
 		return $table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+	}
+
+	/**
+	 * Public ViettelPost tracking URL for a waybill. Reuses the canonical URL
+	 * builder from epic-order-emails when present so the dashboard, the
+	 * customer "shipped" email and wp-admin never drift; falls back to the same
+	 * URL and stays filterable.
+	 */
+	private static function shipment_tracking_url( $tracking ) {
+		$tracking = trim( (string) $tracking );
+		if ( '' === $tracking ) { return ''; }
+		if ( function_exists( 'epic_order_emails_viettelpost_tracking_url' ) ) {
+			return (string) epic_order_emails_viettelpost_tracking_url( $tracking );
+		}
+		return (string) apply_filters( 'epic_admin_dashboard_viettelpost_tracking_url', 'https://viettelpost.com.vn/tra-cuu-hanh-trinh-don/?billcode=' . rawurlencode( $tracking ), $tracking );
+	}
+
+	/**
+	 * The ViettelPost journey for a shipment, newest event first. ViettelPost
+	 * exposes no tracking-query endpoint — the courier plugin records one
+	 * WooCommerce order note per status change — so the journey is derived
+	 * from those notes. Each entry is { status, date, note }.
+	 */
+	private static function shipment_tracking_history( $order ) {
+		// Prefer structured events if a future courier version stores them.
+		$stored = $order->get_meta( '_vtp_tracking_history' );
+		if ( is_array( $stored ) && $stored ) {
+			$events = array();
+			foreach ( $stored as $event ) {
+				if ( ! is_array( $event ) ) { continue; }
+				$events[] = array(
+					'status' => isset( $event['status'] ) ? (string) $event['status'] : '',
+					'date' => isset( $event['date'] ) ? (string) $event['date'] : '',
+					'note' => isset( $event['note'] ) ? (string) $event['note'] : '',
+				);
+			}
+			if ( $events ) { return array_reverse( $events ); }
+		}
+
+		$codes  = '10[1-7]|20[0-2]|300|400|50[0-9]|515|550';
+		$events = array();
+		foreach ( wc_get_order_notes( array( 'order_id' => $order->get_id() ) ) as $note ) {
+			$content = isset( $note->content ) ? wp_strip_all_tags( (string) $note->content ) : '';
+			if ( ! preg_match( '/\((' . $codes . ')\)/', $content, $match ) ) { continue; }
+			$date = '';
+			if ( preg_match( '/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/', $content, $date_match ) ) {
+				$date = $date_match[0];
+			} elseif ( isset( $note->date_created ) && $note->date_created instanceof DateTimeInterface ) {
+				$date = $note->date_created->format( 'Y-m-d H:i:s' );
+			}
+			$text = preg_replace( '/^.*?\(' . $codes . '\)/s', '', $content );
+			$text = preg_replace( '/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/', '', (string) $text );
+			$text = trim( (string) preg_replace( '/^[\s\x{2013}\x{2014}-]+|[\s\x{2013}\x{2014}-]+$/u', '', (string) $text ) );
+			$events[] = array( 'status' => $match[1], 'date' => $date, 'note' => $text );
+		}
+		return array_reverse( $events );
 	}
 
 	private static function shipment_reconciliation_state( $order_id ) {
