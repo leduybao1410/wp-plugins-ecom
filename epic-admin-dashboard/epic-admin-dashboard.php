@@ -2,7 +2,7 @@
 /**
  * Plugin Name: EPIC Admin Dashboard API
  * Description: Administrator-only session bridge and business API for the EPIC Admin dashboard.
- * Version: 0.1.7
+ * Version: 0.1.8
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Text Domain: epic-admin-dashboard
@@ -10,9 +10,10 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-define( 'EPIC_ADMIN_DASHBOARD_VERSION', '0.1.7' );
+define( 'EPIC_ADMIN_DASHBOARD_VERSION', '0.1.8' );
 define( 'EPIC_ADMIN_DASHBOARD_DIR', plugin_dir_path( __FILE__ ) );
 require_once EPIC_ADMIN_DASHBOARD_DIR . 'includes/class-epic-admin-dashboard.php';
+require_once EPIC_ADMIN_DASHBOARD_DIR . 'includes/class-epic-admin-security.php';
 
 register_activation_hook( __FILE__, array( 'Epic_Admin_Dashboard', 'activate' ) );
 add_action( 'plugins_loaded', array( 'Epic_Admin_Dashboard', 'init' ), 20 );
@@ -75,6 +76,13 @@ function epic_admin_dashboard_render_settings_page() {
 		<?php settings_errors( 'epic_admin_dashboard' ); ?>
 		<form action="options.php" method="post">
 			<?php settings_fields( 'epic_admin_dashboard' ); do_settings_sections( 'epic-admin-dashboard' ); submit_button(); ?>
+		</form>
+		<h2><?php esc_html_e( 'Dashboard sessions', 'epic-admin-dashboard' ); ?></h2>
+		<?php if ( isset( $_GET['sessions_revoked'] ) ) { echo '<p>' . esc_html__( 'Your dashboard sessions have been revoked.', 'epic-admin-dashboard' ) . '</p>'; } ?>
+		<form action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" method="post">
+			<input type="hidden" name="action" value="epic_admin_revoke_all" />
+			<?php wp_nonce_field( 'epic_admin_revoke_all' ); ?>
+			<?php submit_button( __( 'Revoke all my dashboard sessions', 'epic-admin-dashboard' ), 'secondary' ); ?>
 		</form>
 	</div>
 	<?php

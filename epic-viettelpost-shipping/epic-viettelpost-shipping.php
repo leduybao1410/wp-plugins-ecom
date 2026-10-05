@@ -3,7 +3,7 @@
  * Plugin Name:       EPIC ViettelPost Shipping Manager
  * Plugin URI:        https://epicroastery.coffee/
  * Description:       ViettelPost shipment booking, cancellation, label printing, and status tracking for WooCommerce orders, mirroring the EPIC GHN Shipping Manager.
- * Version:           0.1.6
+ * Version:           0.1.7
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_VTP_VERSION', '0.1.6' );
+define( 'EPIC_VTP_VERSION', '0.1.7' );
 define( 'EPIC_VTP_PLUGIN_FILE', __FILE__ );
 define( 'EPIC_VTP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_VTP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -148,8 +148,26 @@ function epic_vtp_init() {
 add_action( 'plugins_loaded', 'epic_vtp_init' );
 
 /**
- * Registers the inbound ViettelPost webhook route. Runs outside the
- * is_admin()-gated init because wp-json requests are not admin requests.
+ * Whether the current REST request targets the EPIC admin dashboard's
+ * `epic-admin/v1` namespace (the server-to-server proxy behind the separate
+ * dashboard app). Those requests are not is_admin(), so the admin-only include
+ * block must be loaded for them explicitly.
+ */
+function epic_vtp_is_admin_dashboard_rest_request() {
+	$route = '';
+	if ( isset( $GLOBALS['wp'] ) && isset( $GLOBALS['wp']->query_vars['rest_route'] ) ) {
+		$route = (string) $GLOBALS['wp']->query_vars['rest_route'];
+	}
+	if ( '' === $route && isset( $_SERVER['REQUEST_URI'] ) ) {
+		$route = (string) wp_parse_url( (string) wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
+	}
+	return false !== strpos( $route, 'epic-admin/v1/' );
+}
+
+/**
+ * Registers the inbound ViettelPost webhook route, and loads the admin include
+ * set for EPIC admin dashboard REST requests. Runs outside the is_admin()-gated
+ * init because wp-json requests are not admin requests.
  */
 add_action(
 	'rest_api_init',
@@ -161,6 +179,15 @@ add_action(
 		require_once EPIC_VTP_PLUGIN_DIR . 'includes/class-order-meta-box.php';
 		require_once EPIC_VTP_PLUGIN_DIR . 'includes/class-webhook.php';
 		Epic_VTP_Webhook::register_routes();
+
+		// The EPIC admin dashboard books/cancels/prints shipments and reads this
+		// plugin's health over `/wp-json/epic-admin/v1/...`, where is_admin() is
+		// false. Load the same classes its REST callbacks reference
+		// (Epic_VTP_Ajax, Epic_VTP_Address_Resolver, ...) before they run.
+		// The admin `::init()` hooks are intentionally NOT registered here.
+		if ( epic_vtp_is_admin_dashboard_rest_request() ) {
+			epic_vtp_load_includes();
+		}
 	}
 );
 

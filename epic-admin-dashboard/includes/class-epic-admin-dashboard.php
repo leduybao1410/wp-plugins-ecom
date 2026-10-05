@@ -15,6 +15,8 @@ final class Epic_Admin_Dashboard {
 	const DIRECT_ORDER_PREVIEW_TTL = 900;
 
 	public static function init() {
+		if ( get_option( 'epic_admin_schema_version' ) !== EPIC_ADMIN_DASHBOARD_VERSION ) { self::activate(); }
+		Epic_Admin_Security::init();
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
 		add_action( 'admin_post_epic_admin_authorize', array( __CLASS__, 'authorize' ) );
 	}
@@ -34,10 +36,40 @@ final class Epic_Admin_Dashboard {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$tables = self::tables();
 		$collate = $wpdb->get_charset_collate();
-		dbDelta( "CREATE TABLE {$tables['sessions']} (id bigint unsigned NOT NULL AUTO_INCREMENT, token_hash char(64) NOT NULL, user_id bigint unsigned NOT NULL, created_at datetime NOT NULL, last_used_at datetime NOT NULL, expires_at datetime NOT NULL, PRIMARY KEY (id), UNIQUE KEY token_hash (token_hash), KEY user_id (user_id), KEY expires_at (expires_at)) $collate;" );
-		dbDelta( "CREATE TABLE {$tables['grants']} (id bigint unsigned NOT NULL AUTO_INCREMENT, state_hash char(64) NOT NULL, code_hash char(64) NULL, code_challenge char(43) NOT NULL, callback_url varchar(255) NOT NULL, user_id bigint unsigned NULL, status varchar(16) NOT NULL DEFAULT 'pending', expires_at datetime NOT NULL, PRIMARY KEY (id), UNIQUE KEY state_hash (state_hash), UNIQUE KEY code_hash (code_hash), KEY expires_at (expires_at)) $collate;" );
+		dbDelta( "CREATE TABLE {$tables['sessions']} (
+			id bigint unsigned NOT NULL AUTO_INCREMENT,
+			token_hash char(64) NOT NULL,
+			auth_version char(64) NOT NULL DEFAULT '',
+			user_id bigint unsigned NOT NULL,
+			created_at datetime NOT NULL,
+			last_used_at datetime NOT NULL,
+			expires_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY token_hash (token_hash),
+			KEY user_id (user_id),
+			KEY expires_at (expires_at)
+		) $collate;" );
+		dbDelta( "CREATE TABLE {$tables['grants']} (
+			id bigint unsigned NOT NULL AUTO_INCREMENT,
+			state_hash char(64) NOT NULL,
+			code_hash char(64) NULL,
+			code_challenge char(43) NOT NULL,
+			callback_url varchar(255) NOT NULL,
+			auth_version char(64) NOT NULL DEFAULT '',
+			user_id bigint unsigned NULL,
+			status varchar(16) NOT NULL DEFAULT 'pending',
+			expires_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY state_hash (state_hash),
+			UNIQUE KEY code_hash (code_hash),
+			KEY expires_at (expires_at)
+		) $collate;" );
 		dbDelta( "CREATE TABLE {$tables['audit']} (id bigint unsigned NOT NULL AUTO_INCREMENT, user_id bigint unsigned NOT NULL, action varchar(100) NOT NULL, resource varchar(100) NOT NULL, record_id varchar(100) NOT NULL DEFAULT '', fields text NOT NULL, outcome varchar(24) NOT NULL, created_at datetime NOT NULL, PRIMARY KEY (id), KEY created_at (created_at), KEY user_id (user_id)) $collate;" );
 		dbDelta( "CREATE TABLE {$tables['receipts']} (id bigint unsigned NOT NULL AUTO_INCREMENT, receipt_key char(64) NOT NULL, user_id bigint unsigned NOT NULL, action varchar(100) NOT NULL, outcome varchar(24) NOT NULL, response longtext NULL, created_at datetime NOT NULL, PRIMARY KEY (id), UNIQUE KEY receipt_key (receipt_key)) $collate;" );
+		Epic_Admin_Security::install();
+		if ( $wpdb->get_var( "SHOW COLUMNS FROM {$tables['sessions']} LIKE 'auth_version'" ) && $wpdb->get_var( "SHOW COLUMNS FROM {$tables['grants']} LIKE 'auth_version'" ) && $wpdb->get_var( "SHOW COLUMNS FROM {$wpdb->prefix}epic_admin_limits LIKE 'bucket'" ) ) {
+			update_option( 'epic_admin_schema_version', EPIC_ADMIN_DASHBOARD_VERSION, false );
+		}
 	}
 
 	private static function secret() {
@@ -88,6 +120,8 @@ final class Epic_Admin_Dashboard {
 		$challenge = isset( $body['code_challenge'] ) ? (string) $body['code_challenge'] : '';
 		$callback = isset( $body['callback_url'] ) ? (string) $body['callback_url'] : '';
 		if ( ! self::secret() || ! hash_equals( self::secret(), $secret ) ) { return self::error( 'invalid_client', 'Dashboard authentication is not configured.', 401 ); }
+		$limit = Epic_Admin_Security::rate_limit( $request, 'authorize' );
+		if ( is_wp_error( $limit ) ) { return $limit; }
 		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,100}$/', $state ) || ! preg_match( '/^[A-Za-z0-9_-]{43}$/', $challenge ) || ! $callback || ! hash_equals( self::callback_url(), $callback ) || 'https' !== wp_parse_url( $callback, PHP_URL_SCHEME ) ) { return self::error( 'invalid_request', 'Invalid dashboard login request.', 400 ); }
 		$tables = self::tables();
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$tables['grants']} WHERE expires_at < %s", gmdate( 'Y-m-d H:i:s' ) ) );
@@ -108,7 +142,7 @@ final class Epic_Admin_Dashboard {
 		$grant = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tables['grants']} WHERE state_hash = %s AND status = 'pending' AND expires_at > %s", self::hash( $state ), gmdate( 'Y-m-d H:i:s' ) ) );
 		if ( ! $grant ) { wp_die( esc_html__( 'Dashboard sign-in expired. Return to the dashboard and try again.', 'epic-admin-dashboard' ), '', array( 'response' => 400 ) ); }
 		$code = rtrim( strtr( base64_encode( random_bytes( 32 ) ), '+/', '-_' ), '=' );
-		$updated = $wpdb->update( $tables['grants'], array( 'status' => 'authorized', 'code_hash' => self::hash( $code ), 'user_id' => get_current_user_id(), 'expires_at' => gmdate( 'Y-m-d H:i:s', time() + 60 ) ), array( 'id' => (int) $grant->id, 'status' => 'pending' ), array( '%s', '%s', '%d', '%s' ), array( '%d', '%s' ) );
+		$updated = $wpdb->update( $tables['grants'], array( 'status' => 'authorized', 'code_hash' => self::hash( $code ), 'auth_version' => Epic_Admin_Security::session_version( wp_get_current_user() ), 'user_id' => get_current_user_id(), 'expires_at' => gmdate( 'Y-m-d H:i:s', time() + 60 ) ), array( 'id' => (int) $grant->id, 'status' => 'pending' ), array( '%s', '%s', '%s', '%d', '%s' ), array( '%d', '%s' ) );
 		if ( 1 !== $updated ) { wp_die( esc_html__( 'Dashboard sign-in could not be completed.', 'epic-admin-dashboard' ), '', array( 'response' => 409 ) ); }
 		wp_redirect( add_query_arg( array( 'code' => $code, 'state' => $state ), $grant->callback_url ) ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- callback is the exact HTTPS URL registered by the dashboard client.
 		exit;
@@ -121,6 +155,8 @@ final class Epic_Admin_Dashboard {
 		$code = isset( $body['code'] ) ? (string) $body['code'] : '';
 		$verifier = isset( $body['code_verifier'] ) ? (string) $body['code_verifier'] : '';
 		if ( ! self::secret() || ! hash_equals( self::secret(), $secret ) ) { return self::error( 'invalid_client', 'Invalid dashboard client.', 401 ); }
+		$limit = Epic_Admin_Security::rate_limit( $request, 'exchange' );
+		if ( is_wp_error( $limit ) ) { return $limit; }
 		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,100}$/', $code ) || ! preg_match( '/^[A-Za-z0-9._~-]{43,128}$/', $verifier ) ) { return self::error( 'invalid_grant', 'Dashboard authorization code is invalid or expired.', 400 ); }
 		$tables = self::tables();
 		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tables['grants']} WHERE code_hash = %s AND status = 'authorized' AND expires_at > %s", self::hash( $code ), gmdate( 'Y-m-d H:i:s' ) ) );
@@ -128,11 +164,12 @@ final class Epic_Admin_Dashboard {
 		if ( ! $row || ! hash_equals( (string) $row->code_challenge, $challenge ) ) { return self::error( 'invalid_grant', 'Dashboard authorization code is invalid or expired.', 400 ); }
 		$user = get_user_by( 'id', (int) $row->user_id );
 		if ( ! $user || ! user_can( $user, 'manage_options' ) ) { return self::error( 'forbidden', 'An administrator account is required.', 403 ); }
+		if ( empty( $row->auth_version ) || ! hash_equals( Epic_Admin_Security::session_version( $user ), (string) $row->auth_version ) ) { return self::error( 'invalid_grant', 'Dashboard authorization was revoked. Start a new sign-in.', 401 ); }
 		$used = $wpdb->update( $tables['grants'], array( 'status' => 'used' ), array( 'id' => (int) $row->id, 'status' => 'authorized' ), array( '%s' ), array( '%d', '%s' ) );
 		if ( 1 !== $used ) { return self::error( 'invalid_grant', 'Dashboard authorization code has already been used.', 409 ); }
 		$token = rtrim( strtr( base64_encode( random_bytes( 32 ) ), '+/', '-_' ), '=' );
 		$now = time();
-		$inserted = $wpdb->insert( $tables['sessions'], array( 'token_hash' => self::hash( $token ), 'user_id' => (int) $user->ID, 'created_at' => gmdate( 'Y-m-d H:i:s', $now ), 'last_used_at' => gmdate( 'Y-m-d H:i:s', $now ), 'expires_at' => gmdate( 'Y-m-d H:i:s', $now + self::SESSION_TTL ) ), array( '%s', '%d', '%s', '%s', '%s' ) );
+		$inserted = $wpdb->insert( $tables['sessions'], array( 'token_hash' => self::hash( $token ), 'auth_version' => $row->auth_version, 'user_id' => (int) $user->ID, 'created_at' => gmdate( 'Y-m-d H:i:s', $now ), 'last_used_at' => gmdate( 'Y-m-d H:i:s', $now ), 'expires_at' => gmdate( 'Y-m-d H:i:s', $now + self::SESSION_TTL ) ), array( '%s', '%s', '%d', '%s', '%s', '%s' ) );
 		if ( false === $inserted ) { return self::error( 'session_store_unavailable', 'Administrator sign-in could not be completed. Start a new sign-in.', 503 ); }
 		return rest_ensure_response( array( 'session' => $token, 'expires_in' => self::SESSION_TTL, 'user' => array( 'id' => (int) $user->ID, 'name' => $user->display_name, 'email' => $user->user_email ) ) );
 	}
@@ -146,6 +183,10 @@ final class Epic_Admin_Dashboard {
 		if ( ! $row || strtotime( $row->last_used_at . ' UTC' ) < time() - self::IDLE_TTL ) { if ( $row ) { $wpdb->delete( $tables['sessions'], array( 'id' => (int) $row->id ), array( '%d' ) ); } return self::error( 'session_expired', 'Administrator session expired. Sign in again.', 401 ); }
 		$user = get_user_by( 'id', (int) $row->user_id );
 		if ( ! $user || ! user_can( $user, 'manage_options' ) ) { $wpdb->delete( $tables['sessions'], array( 'id' => (int) $row->id ), array( '%d' ) ); return self::error( 'forbidden', 'Administrator access is required.', 403 ); }
+		if ( empty( $row->auth_version ) || ! hash_equals( Epic_Admin_Security::session_version( $user ), (string) $row->auth_version ) ) {
+			$wpdb->delete( $tables['sessions'], array( 'id' => (int) $row->id ), array( '%d' ) );
+			return self::error( 'session_revoked', 'Administrator session revoked. Sign in again.', 401 );
+		}
 		wp_set_current_user( (int) $user->ID );
 		$wpdb->update( $tables['sessions'], array( 'last_used_at' => gmdate( 'Y-m-d H:i:s' ) ), array( 'id' => (int) $row->id ), array( '%s' ), array( '%d' ) );
 		$GLOBALS['epic_admin_dashboard_session'] = array( 'id' => (int) $row->id, 'user_id' => (int) $user->ID, 'token_hash' => self::hash( $token ) );
@@ -155,7 +196,9 @@ final class Epic_Admin_Dashboard {
 	public static function revoke( $request ) {
 		global $wpdb;
 		$session = $GLOBALS['epic_admin_dashboard_session'];
-		$wpdb->delete( self::tables()['sessions'], array( 'id' => $session['id'] ), array( '%d' ) );
+		$deleted = $wpdb->delete( self::tables()['sessions'], array( 'id' => $session['id'] ), array( '%d' ) );
+		if ( false === $deleted ) { Epic_Admin_Security::audit( $session['user_id'], 'auth.revoke', 'failed' ); return self::error( 'revoke_failed', 'Administrator session could not be revoked.', 503 ); }
+		Epic_Admin_Security::audit( $session['user_id'], 'auth.revoke', 'success' );
 		return rest_ensure_response( array( 'ok' => true ) );
 	}
 

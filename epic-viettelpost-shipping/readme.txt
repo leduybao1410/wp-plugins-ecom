@@ -4,7 +4,7 @@ Tags: woocommerce, viettelpost, shipping, cod, vietnam
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.1.6
+Stable tag: 0.1.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,14 @@ Log in at viettelpost.vn → Cấu hình tài khoản → Thêm mới token and 
 generated token. Sandbox and production tokens are different.
 
 == Changelog ==
+
+= 0.1.7 =
+* Fix: the EPIC admin dashboard reported "ViettelPost shipping unavailable"
+  and rejected booking/cancel/label actions with a 503. The dashboard reaches
+  this plugin over `/wp-json/epic-admin/v1/...`, where is_admin() is false, so
+  the admin-only include set was never loaded and `Epic_VTP_Ajax` did not
+  exist. Those REST requests now load the include set before the dashboard's
+  callbacks run (admin hooks are still registered only in wp-admin).
 
 = 0.1.6 =
 * Feature: "ViettelPost Shipments" dashboard (WooCommerce submenu) — list
