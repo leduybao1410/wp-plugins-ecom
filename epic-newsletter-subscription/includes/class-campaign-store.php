@@ -131,12 +131,43 @@ class Epic_Newsletter_Campaign_Store {
 		return $row ? $row : null;
 	}
 
+	/** Update a draft only; a campaign that has entered the send queue is immutable. */
+	public static function update_draft( $campaign_id, array $data ) {
+		global $wpdb;
+		return false !== $wpdb->update(
+			self::campaigns_table(),
+			array(
+				'subject_vi'       => (string) ( $data['subject_vi'] ?? '' ),
+				'subject_en'       => (string) ( $data['subject_en'] ?? '' ),
+				'body_vi'          => (string) ( $data['body_vi'] ?? '' ),
+				'body_en'          => (string) ( $data['body_en'] ?? '' ),
+				'recipient_filter' => (string) ( $data['recipient_filter'] ?? 'all' ),
+			),
+			array( 'id' => (int) $campaign_id, 'status' => self::STATUS_DRAFT ),
+			array( '%s', '%s', '%s', '%s', '%s' ),
+			array( '%d', '%s' )
+		);
+	}
+
 	public static function list_all( $limit = 50 ) {
 		global $wpdb;
 		return $wpdb->get_results(
 			$wpdb->prepare( 'SELECT * FROM ' . self::campaigns_table() . ' ORDER BY created_at DESC LIMIT %d', (int) $limit ),
 			ARRAY_A
 		);
+	}
+
+	public static function get_page( $limit, $offset ) {
+		global $wpdb;
+		return $wpdb->get_results(
+			$wpdb->prepare( 'SELECT * FROM ' . self::campaigns_table() . ' ORDER BY created_at DESC LIMIT %d OFFSET %d', (int) $limit, (int) $offset ),
+			ARRAY_A
+		);
+	}
+
+	public static function count() {
+		global $wpdb;
+		return (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . self::campaigns_table() );
 	}
 
 	/** Only ever called on a `status = draft` row from the UI — a campaign that has started sending keeps its recipient log around as a permanent record. */

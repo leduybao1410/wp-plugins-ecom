@@ -147,10 +147,12 @@ class Epic_Adv_Coupons_Restrictions {
 	 * @param WC_Coupon $coupon
 	 * @param string    $email
 	 * @param string    $phone
+	 * @param bool      $require_identity Fail closed when a restricted coupon
+	 *                                    has no email or phone yet.
 	 * @return string|null Violation message, or null if the coupon passes.
 	 */
-	public static function check( $coupon, $email, $phone ) {
-		return self::get_violation_message( $coupon, (string) $email, (string) $phone );
+	public static function check( $coupon, $email, $phone, $require_identity = false ) {
+		return self::get_violation_message( $coupon, (string) $email, (string) $phone, $require_identity );
 	}
 
 	/**
@@ -160,11 +162,12 @@ class Epic_Adv_Coupons_Restrictions {
 	 * @param WC_Coupon $coupon
 	 * @param string    $email
 	 * @param string    $phone
-	 * @param bool      $final_check True when called from checkout submit —
-	 *                                skips the "not known yet" leniency.
+	 * @param bool      $require_identity True when the caller must have
+	 *                                    supplied a customer identity — used by
+	 *                                    checkout submit and headless quotes.
 	 * @return string|null
 	 */
-	protected static function get_violation_message( $coupon, $email, $phone, $final_check = false ) {
+	protected static function get_violation_message( $coupon, $email, $phone, $require_identity = false ) {
 		if ( ! $coupon instanceof WC_Coupon ) {
 			return null;
 		}
@@ -176,7 +179,7 @@ class Epic_Adv_Coupons_Restrictions {
 
 		// At checkout-submit time a restricted coupon must be tied to a known
 		// customer; "identity unknown" must fail closed, not open.
-		if ( $final_check && ( $first_order_only || '' !== $allowlist ) && '' === $email && '' === $phone ) {
+		if ( $require_identity && ( $first_order_only || '' !== $allowlist ) && '' === $email && '' === $phone ) {
 			return sprintf(
 				/* translators: %s: coupon code */
 				__( 'Coupon "%s" requires a customer email or phone number.', 'epic-advanced-coupons' ),

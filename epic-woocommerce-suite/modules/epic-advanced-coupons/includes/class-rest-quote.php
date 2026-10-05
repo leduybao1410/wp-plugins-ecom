@@ -235,7 +235,10 @@ class Epic_Adv_Coupons_Rest_Quote {
 		// filter runs (see class-restrictions.php) — running it again here
 		// is what lets the checkout show the customer a message *before*
 		// they submit, rather than only finding out at order creation.
-		$restriction_error = Epic_Adv_Coupons_Restrictions::check( $coupon, $email, $phone );
+		// A headless preview has no WooCommerce session to fill in identity
+		// later, so restricted coupons must fail closed until the customer
+		// provides the email/phone used by the restriction.
+		$restriction_error = Epic_Adv_Coupons_Restrictions::check( $coupon, $email, $phone, true );
 		if ( $restriction_error ) {
 			return $fail( $restriction_error );
 		}
@@ -382,18 +385,26 @@ class Epic_Adv_Coupons_Rest_Quote {
 		}
 
 		$type = $coupon->get_discount_type();
+		$eligible_subtotal = array_reduce(
+			$eligible,
+			function ( $sum, $item ) {
+				return $sum + ( $item['unit_price'] * $item['quantity'] );
+			},
+			0.0
+		);
 
-		if ( in_array( $type, array( 'percent', 'fixed_cart' ), true ) ) {
-			$eligible_subtotal = array_reduce(
-				$eligible,
-				function ( $sum, $item ) {
-					return $sum + ( $item['unit_price'] * $item['quantity'] );
-				},
-				0.0
-			);
+		if ( 'fixed_cart' === $type ) {
+			// WC_Coupon::get_discount_amount() only calculates a fixed-cart
+			// discount when it receives a real cart item and a live WC()->cart.
+			// This headless quote has neither, so calling it with only the
+			// subtotal silently returns 0 and makes every fixed-cart coupon look
+			// inapplicable. Match the cart-wide result for this eligible subtotal.
+			return max( 0.0, min( (float) $coupon->get_amount(), (float) $eligible_subtotal ) );
+		}
+
+		if ( 'percent' === $type ) {
 			// get_discount_amount() with a numeric $discounting_amount and no
-			// $cart_item is the cart-wide code path (percent of amount, or
-			// fixed capped at the amount) — the same public method
+			// $cart_item is the cart-wide code path — the same public method
 			// WC_Cart/WC_Discounts call internally, just invoked directly.
 			return max( 0.0, (float) $coupon->get_discount_amount( $eligible_subtotal ) );
 		}

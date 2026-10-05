@@ -261,42 +261,62 @@ class Epic_Adv_Coupons_Admin_Tab {
 	}
 
 	public static function save( $post_id ) {
-		$meta = Epic_Adv_Coupons_Meta::class;
-
-		update_post_meta( $post_id, $meta::FIRST_ORDER_ONLY, isset( $_POST[ $meta::FIRST_ORDER_ONLY ] ) ? 'yes' : 'no' ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
-
-		update_post_meta( $post_id, $meta::ALLOWLIST, isset( $_POST['epic_allowlist'] ) ? sanitize_textarea_field( wp_unslash( $_POST['epic_allowlist'] ) ) : '' );
-
-		$days = isset( $_POST['epic_schedule_days'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['epic_schedule_days'] ) ) : array();
-		update_post_meta( $post_id, $meta::SCHEDULE_DAYS, implode( ',', $days ) );
-		update_post_meta( $post_id, $meta::SCHEDULE_START, isset( $_POST['epic_schedule_start'] ) ? sanitize_text_field( wp_unslash( $_POST['epic_schedule_start'] ) ) : '' );
-		update_post_meta( $post_id, $meta::SCHEDULE_END, isset( $_POST['epic_schedule_end'] ) ? sanitize_text_field( wp_unslash( $_POST['epic_schedule_end'] ) ) : '' );
-
-		update_post_meta( $post_id, $meta::BXGY_ENABLED, isset( $_POST[ $meta::BXGY_ENABLED ] ) ? 'yes' : 'no' );
-
-		$trigger_type = isset( $_POST['epic_bxgy_trigger_type'] ) && 'category' === $_POST['epic_bxgy_trigger_type'] ? 'category' : 'product';
-		$reward_type  = isset( $_POST['epic_bxgy_reward_type'] ) && 'category' === $_POST['epic_bxgy_reward_type'] ? 'category' : 'product';
-		update_post_meta( $post_id, $meta::BXGY_TRIGGER_TYPE, $trigger_type );
-		update_post_meta( $post_id, $meta::BXGY_REWARD_TYPE, $reward_type );
-
+		$trigger_type = isset( $_POST['epic_bxgy_trigger_type'] ) && 'category' === $_POST['epic_bxgy_trigger_type'] ? 'category' : 'product'; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+		$reward_type = isset( $_POST['epic_bxgy_reward_type'] ) && 'category' === $_POST['epic_bxgy_reward_type'] ? 'category' : 'product'; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
 		$trigger_field = 'category' === $trigger_type ? 'epic_bxgy_trigger_id_category' : 'epic_bxgy_trigger_id_product';
-		$reward_field  = 'category' === $reward_type ? 'epic_bxgy_reward_id_category' : 'epic_bxgy_reward_id_product';
-		update_post_meta( $post_id, $meta::BXGY_TRIGGER_ID, isset( $_POST[ $trigger_field ] ) ? (int) $_POST[ $trigger_field ] : 0 );
-		update_post_meta( $post_id, $meta::BXGY_REWARD_ID, isset( $_POST[ $reward_field ] ) ? (int) $_POST[ $reward_field ] : 0 );
+		$reward_field = 'category' === $reward_type ? 'epic_bxgy_reward_id_category' : 'epic_bxgy_reward_id_product';
+		$days = isset( $_POST['epic_schedule_days'] ) ? (array) wp_unslash( $_POST['epic_schedule_days'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+		$bxgy_type = isset( $_POST['epic_bxgy_discount_type'] ) ? sanitize_key( wp_unslash( $_POST['epic_bxgy_discount_type'] ) ) : 'free'; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+		self::save_rules(
+			$post_id,
+			array(
+				'first_order_only' => isset( $_POST[ Epic_Adv_Coupons_Meta::FIRST_ORDER_ONLY ] ), // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+				'allowlist' => isset( $_POST['epic_allowlist'] ) ? wp_unslash( $_POST['epic_allowlist'] ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+				'schedule_days' => $days,
+				'schedule_start' => isset( $_POST['epic_schedule_start'] ) ? wp_unslash( $_POST['epic_schedule_start'] ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+				'schedule_end' => isset( $_POST['epic_schedule_end'] ) ? wp_unslash( $_POST['epic_schedule_end'] ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+				'bxgy' => array(
+					'enabled' => isset( $_POST[ Epic_Adv_Coupons_Meta::BXGY_ENABLED ] ), // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+					'trigger_type' => $trigger_type, 'trigger_id' => isset( $_POST[ $trigger_field ] ) ? absint( $_POST[ $trigger_field ] ) : 0, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+					'trigger_qty' => isset( $_POST['epic_bxgy_trigger_qty'] ) ? absint( $_POST['epic_bxgy_trigger_qty'] ) : 1, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+					'reward_type' => $reward_type, 'reward_id' => isset( $_POST[ $reward_field ] ) ? absint( $_POST[ $reward_field ] ) : 0, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+					'reward_qty' => isset( $_POST['epic_bxgy_reward_qty'] ) ? absint( $_POST['epic_bxgy_reward_qty'] ) : 1, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+					'discount_type' => $bxgy_type, 'discount_value' => isset( $_POST['epic_bxgy_discount_value'] ) ? (float) wp_unslash( $_POST['epic_bxgy_discount_value'] ) : 0, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+					'max_repeats' => isset( $_POST[ Epic_Adv_Coupons_Meta::BXGY_MAX_REPEATS ] ) ? absint( $_POST[ Epic_Adv_Coupons_Meta::BXGY_MAX_REPEATS ] ) : 1, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+				),
+				'auto_apply_enabled' => isset( $_POST[ Epic_Adv_Coupons_Meta::AUTO_APPLY_ENABLED ] ), // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+				'auto_apply_category' => isset( $_POST['epic_auto_apply_category'] ) ? absint( $_POST['epic_auto_apply_category'] ) : 0, // phpcs:ignore WordPress.Security.NonceVerification.Missing -- handled by WooCommerce's own coupon-save nonce.
+			)
+		);
+	}
 
-		update_post_meta( $post_id, $meta::BXGY_TRIGGER_QTY, isset( $_POST['epic_bxgy_trigger_qty'] ) ? max( 1, (int) $_POST['epic_bxgy_trigger_qty'] ) : 1 );
-		update_post_meta( $post_id, $meta::BXGY_REWARD_QTY, isset( $_POST['epic_bxgy_reward_qty'] ) ? max( 1, (int) $_POST['epic_bxgy_reward_qty'] ) : 1 );
-
-		$discount_type = isset( $_POST['epic_bxgy_discount_type'] ) ? sanitize_key( $_POST['epic_bxgy_discount_type'] ) : 'free';
-		if ( ! in_array( $discount_type, array( 'free', 'percent', 'fixed' ), true ) ) {
-			$discount_type = 'free';
-		}
+	/** Persist normalized rule data for both WooCommerce's coupon screen and the private dashboard. */
+	public static function save_rules( $post_id, array $rules ) {
+		$meta = Epic_Adv_Coupons_Meta::class;
+		$bxgy = isset( $rules['bxgy'] ) && is_array( $rules['bxgy'] ) ? $rules['bxgy'] : array();
+		$trigger_type = isset( $bxgy['trigger_type'] ) && 'category' === $bxgy['trigger_type'] ? 'category' : 'product';
+		$reward_type = isset( $bxgy['reward_type'] ) && 'category' === $bxgy['reward_type'] ? 'category' : 'product';
+		$days = isset( $rules['schedule_days'] ) ? (array) $rules['schedule_days'] : array();
+		$discount_type = isset( $bxgy['discount_type'] ) ? sanitize_key( $bxgy['discount_type'] ) : 'free';
+		if ( ! in_array( $discount_type, array( 'free', 'percent', 'fixed' ), true ) ) { $discount_type = 'free'; }
+		update_post_meta( $post_id, $meta::FIRST_ORDER_ONLY, ! empty( $rules['first_order_only'] ) ? 'yes' : 'no' );
+		update_post_meta( $post_id, $meta::ALLOWLIST, isset( $rules['allowlist'] ) ? sanitize_textarea_field( $rules['allowlist'] ) : '' );
+		update_post_meta( $post_id, $meta::SCHEDULE_DAYS, implode( ',', array_map( 'sanitize_key', $days ) ) );
+		update_post_meta( $post_id, $meta::SCHEDULE_START, isset( $rules['schedule_start'] ) ? sanitize_text_field( $rules['schedule_start'] ) : '' );
+		update_post_meta( $post_id, $meta::SCHEDULE_END, isset( $rules['schedule_end'] ) ? sanitize_text_field( $rules['schedule_end'] ) : '' );
+		update_post_meta( $post_id, $meta::BXGY_ENABLED, ! empty( $bxgy['enabled'] ) ? 'yes' : 'no' );
+		update_post_meta( $post_id, $meta::BXGY_TRIGGER_TYPE, $trigger_type );
+		update_post_meta( $post_id, $meta::BXGY_TRIGGER_ID, absint( $bxgy['trigger_id'] ?? 0 ) );
+		update_post_meta( $post_id, $meta::BXGY_TRIGGER_QTY, max( 1, absint( $bxgy['trigger_qty'] ?? 1 ) ) );
+		update_post_meta( $post_id, $meta::BXGY_REWARD_TYPE, $reward_type );
+		update_post_meta( $post_id, $meta::BXGY_REWARD_ID, absint( $bxgy['reward_id'] ?? 0 ) );
+		update_post_meta( $post_id, $meta::BXGY_REWARD_QTY, max( 1, absint( $bxgy['reward_qty'] ?? 1 ) ) );
 		update_post_meta( $post_id, $meta::BXGY_DISCOUNT_TYPE, $discount_type );
-		update_post_meta( $post_id, $meta::BXGY_DISCOUNT_VALUE, isset( $_POST['epic_bxgy_discount_value'] ) ? (float) $_POST['epic_bxgy_discount_value'] : 0 );
-		update_post_meta( $post_id, $meta::BXGY_MAX_REPEATS, isset( $_POST[ $meta::BXGY_MAX_REPEATS ] ) ? max( 0, (int) $_POST[ $meta::BXGY_MAX_REPEATS ] ) : 1 );
-
-		update_post_meta( $post_id, $meta::AUTO_APPLY_ENABLED, isset( $_POST[ $meta::AUTO_APPLY_ENABLED ] ) ? 'yes' : 'no' );
-		update_post_meta( $post_id, $meta::AUTO_APPLY_CATEGORY, isset( $_POST['epic_auto_apply_category'] ) ? (int) $_POST['epic_auto_apply_category'] : 0 );
+		update_post_meta( $post_id, $meta::BXGY_DISCOUNT_VALUE, isset( $bxgy['discount_value'] ) ? (float) $bxgy['discount_value'] : 0 );
+		update_post_meta( $post_id, $meta::BXGY_MAX_REPEATS, max( 0, (int) ( $bxgy['max_repeats'] ?? 1 ) ) );
+		update_post_meta( $post_id, $meta::AUTO_APPLY_ENABLED, ! empty( $rules['auto_apply_enabled'] ) ? 'yes' : 'no' );
+		update_post_meta( $post_id, $meta::AUTO_APPLY_CATEGORY, absint( $rules['auto_apply_category'] ?? 0 ) );
+		return true;
 	}
 
 	/**
