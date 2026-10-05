@@ -1134,8 +1134,16 @@ final class Epic_Admin_Dashboard {
 		}
 		if ( 'shipments' === $resource && function_exists( 'wc_get_orders' ) ) {
 			if ( ! class_exists( 'Epic_VTP_Order_Meta_Box' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
+			$tracking_lookup = strtoupper( trim( $search ) );
+			if ( '' !== $tracking_lookup && preg_match( '/^[A-Z0-9-]{4,50}$/', $tracking_lookup ) ) {
+				$matched = wc_get_orders( array( 'limit' => 5, 'orderby' => 'date', 'order' => 'DESC', 'meta_query' => array( array( 'key' => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, 'value' => $tracking_lookup ) ) ) );
+				if ( $matched ) {
+					$items = array_map( static function ( $order ) { return self::shipment_list_item( $order ); }, $matched );
+					return rest_ensure_response( array( 'items' => $items, 'page' => 1, 'per_page' => $per_page, 'total' => count( $items ) ) );
+				}
+			}
 			$result = wc_get_orders( array( 'limit' => $per_page, 'page' => $page, 'paginate' => true, 'orderby' => 'date', 'order' => 'DESC', 'meta_query' => array( array( 'key' => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, 'compare' => 'EXISTS' ) ), 'search' => $search ? '*' . $search . '*' : '' ) );
-			$items = array_map( static function ( $order ) { $tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ); return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => $order->get_formatted_billing_full_name(), 'tracking' => $tracking, 'tracking_url' => self::shipment_tracking_url( $tracking ), 'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ), 'shipping' => $order->get_shipping_method() ); }, $result->orders );
+			$items = array_map( static function ( $order ) { return self::shipment_list_item( $order ); }, $result->orders );
 			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page, 'total' => (int) $result->total ) );
 		}
 		if ( 'products' === $resource && function_exists( 'wc_get_products' ) ) {
@@ -1190,6 +1198,11 @@ final class Epic_Admin_Dashboard {
 
 	private static function product_list_item( $product ) {
 		return array( 'id' => $product->get_id(), 'name' => $product->get_name(), 'type' => $product->get_type(), 'status' => $product->get_status(), 'sku' => $product->get_sku(), 'price' => $product->get_price(), 'stock' => $product->get_stock_status(), 'stock_quantity' => $product->get_stock_quantity() );
+	}
+
+	private static function shipment_list_item( $order ) {
+		$tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+		return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => $order->get_formatted_billing_full_name(), 'tracking' => $tracking, 'tracking_url' => self::shipment_tracking_url( $tracking ), 'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ), 'shipping' => $order->get_shipping_method() );
 	}
 
 	private static function custom_records( $resource, $request, $page, $per_page, $search ) {
