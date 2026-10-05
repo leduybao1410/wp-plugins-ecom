@@ -129,16 +129,16 @@ final class Epic_Admin_Dashboard {
 
 	public static function require_admin_session( $request ) {
 		global $wpdb;
-		$header = (string) $request->get_header( 'authorization' );
-		if ( ! preg_match( '/^Bearer ([A-Za-z0-9_-]{40,100})$/', $header, $matches ) ) { return self::error( 'not_authenticated', 'Administrator sign-in required.', 401 ); }
+		$token = (string) $request->get_header( 'x-epic-admin-session' );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,100}$/', $token ) ) { return self::error( 'not_authenticated', 'Administrator sign-in required.', 401 ); }
 		$tables = self::tables();
-		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tables['sessions']} WHERE token_hash = %s AND expires_at > %s", self::hash( $matches[1] ), gmdate( 'Y-m-d H:i:s' ) ) );
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tables['sessions']} WHERE token_hash = %s AND expires_at > %s", self::hash( $token ), gmdate( 'Y-m-d H:i:s' ) ) );
 		if ( ! $row || strtotime( $row->last_used_at . ' UTC' ) < time() - self::IDLE_TTL ) { if ( $row ) { $wpdb->delete( $tables['sessions'], array( 'id' => (int) $row->id ), array( '%d' ) ); } return self::error( 'session_expired', 'Administrator session expired. Sign in again.', 401 ); }
 		$user = get_user_by( 'id', (int) $row->user_id );
 		if ( ! $user || ! user_can( $user, 'manage_options' ) ) { $wpdb->delete( $tables['sessions'], array( 'id' => (int) $row->id ), array( '%d' ) ); return self::error( 'forbidden', 'Administrator access is required.', 403 ); }
 		wp_set_current_user( (int) $user->ID );
 		$wpdb->update( $tables['sessions'], array( 'last_used_at' => gmdate( 'Y-m-d H:i:s' ) ), array( 'id' => (int) $row->id ), array( '%s' ), array( '%d' ) );
-		$GLOBALS['epic_admin_dashboard_session'] = array( 'id' => (int) $row->id, 'user_id' => (int) $user->ID, 'token_hash' => self::hash( $matches[1] ) );
+		$GLOBALS['epic_admin_dashboard_session'] = array( 'id' => (int) $row->id, 'user_id' => (int) $user->ID, 'token_hash' => self::hash( $token ) );
 		return true;
 	}
 
