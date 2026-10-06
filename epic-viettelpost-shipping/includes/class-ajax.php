@@ -17,6 +17,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Epic_VTP_Ajax {
 
+	/**
+	 * Cap for the waybill note sent to ViettelPost's ORDER_NOTE. The customer's
+	 * delivery note is stored on the WooCommerce order as `customer_note`; it
+	 * is combined with the order-number reference and truncated to this many
+	 * characters. ViettelPost's published Swagger does not state a limit and
+	 * the live docs return 403, so 250 is a deliberately conservative value
+	 * (the same cap the storefront applies at checkout).
+	 */
+	const ORDER_NOTE_MAX_LENGTH = 250;
+
 	public static function init() {
 		$actions = array(
 			'epic_vtp_get_provinces'       => 'get_provinces',
@@ -323,11 +333,7 @@ class Epic_VTP_Ajax {
 					'product_name'   => self::order_product_summary( $order ),
 					'quantity'       => self::order_total_quantity( $order ),
 					'items'          => $items,
-					'note'           => sprintf(
-						/* translators: %s: WooCommerce order number */
-						__( 'WooCommerce order #%s (booked from wp-admin)', 'epic-viettelpost-shipping' ),
-						$order->get_order_number()
-					),
+					'note'           => self::booking_note( $order ),
 				)
 			)
 		);
@@ -603,6 +609,38 @@ class Epic_VTP_Ajax {
 			$qty += $item->get_quantity();
 		}
 		return max( 1, $qty );
+	}
+
+	/**
+	 * Builds the waybill note (ViettelPost ORDER_NOTE) for a booking: the
+	 * customer's delivery note (WooCommerce's native `customer_note`, set at
+	 * storefront checkout) followed by the order-number reference. Whitespace
+	 * is collapsed to a single line and the whole string is capped at
+	 * self::ORDER_NOTE_MAX_LENGTH characters so a long customer note can never
+	 * be rejected by (or overflow) the courier's field.
+	 *
+	 * @return string
+	 */
+	private static function booking_note( WC_Order $order ) {
+		$reference = sprintf(
+			/* translators: %s: WooCommerce order number */
+			__( 'WooCommerce order #%s (booked from wp-admin)', 'epic-viettelpost-shipping' ),
+			$order->get_order_number()
+		);
+
+		$customer_note = trim( preg_replace( '/\s+/u', ' ', (string) $order->get_customer_note() ) );
+
+		$note = ( '' !== $customer_note ) ? $customer_note . ' — ' . $reference : $reference;
+
+		if ( function_exists( 'mb_substr' ) ) {
+			if ( mb_strlen( $note, 'UTF-8' ) > self::ORDER_NOTE_MAX_LENGTH ) {
+				$note = mb_substr( $note, 0, self::ORDER_NOTE_MAX_LENGTH, 'UTF-8' );
+			}
+		} elseif ( strlen( $note ) > self::ORDER_NOTE_MAX_LENGTH ) {
+			$note = substr( $note, 0, self::ORDER_NOTE_MAX_LENGTH );
+		}
+
+		return trim( $note );
 	}
 
 	private static function service_fee( $services, $service_code ) {
