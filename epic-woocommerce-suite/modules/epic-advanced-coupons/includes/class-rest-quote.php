@@ -262,7 +262,11 @@ class Epic_Adv_Coupons_Rest_Quote {
 			}
 		}
 
-		if ( 0.0 === $native_amount && 0.0 === $bxgy_amount ) {
+		// A native free-shipping coupon is a meaningful benefit even when its
+		// monetary discount is zero. Headless checkout applies the coupon code
+		// to the real WooCommerce order, while the website separately waives
+		// the quoted shipping fee from this flag.
+		if ( 0.0 === $native_amount && 0.0 === $bxgy_amount && ! $coupon->get_free_shipping() ) {
 			return $fail( sprintf( __( 'Coupon "%s" does not apply to this order.', 'epic-advanced-coupons' ), $code ) );
 		}
 
