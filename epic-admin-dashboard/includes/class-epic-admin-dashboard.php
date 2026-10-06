@@ -1145,7 +1145,6 @@ final class Epic_Admin_Dashboard {
 		$resource = (string) $request['resource'];
 		if ( in_array( $resource, array( 'orders', 'shipments', 'products', 'customers' ), true ) && ! class_exists( 'WooCommerce' ) ) { return self::error( 'woocommerce_unavailable', 'WooCommerce is unavailable. Business data was not loaded.', 503 ); }
 		if ( 'shipments' === $resource && ! class_exists( 'Epic_VTP_Order_Meta_Box' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipment records are unavailable.', 503 ); }
-		if ( 'coupons' === $resource ) { return self::coupon_record( $request, $id ); }
 		if ( 'reviews' === $resource && ! class_exists( 'Epic_Reviews_Store' ) ) { return self::error( 'reviews_unavailable', 'The product reviews plugin is unavailable.', 503 ); }
 		$read_caps = array(
 			'orders' => 'edit_shop_orders', 'shipments' => 'edit_shop_orders', 'products' => 'edit_products', 'customers' => 'manage_woocommerce',
@@ -1236,7 +1235,12 @@ final class Epic_Admin_Dashboard {
 	}
 
 	private static function order_list_item( $order ) {
-		return array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => trim( $order->get_formatted_billing_full_name() ), 'email' => $order->get_billing_email(), 'payment_method' => $order->get_payment_method_title(), 'shipping' => $order->get_shipping_method(), 'source' => (string) $order->get_meta( self::META_SOURCE ) );
+		$item = array( 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'date' => $order->get_date_created() ? $order->get_date_created()->date( DATE_ATOM ) : null, 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency(), 'customer' => trim( $order->get_formatted_billing_full_name() ), 'email' => $order->get_billing_email(), 'payment_method' => $order->get_payment_method_title(), 'shipping' => $order->get_shipping_method(), 'source' => (string) $order->get_meta( self::META_SOURCE ), 'shipment_status' => '', 'shipment_status_code' => '' );
+		if ( class_exists( 'Epic_VTP_Client' ) && class_exists( 'Epic_VTP_Order_Meta_Box' ) ) {
+			$code = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS );
+			if ( '' !== $code ) { $item['shipment_status_code'] = $code; $item['shipment_status'] = Epic_VTP_Client::status_label( $code ); }
+		}
+		return $item;
 	}
 
 	private static function product_list_item( $product ) {
@@ -1337,6 +1341,7 @@ final class Epic_Admin_Dashboard {
 	public static function record( $request ) {
 		$resource = (string) $request['resource']; $id = absint( $request['id'] );
 		if ( ! in_array( $resource, self::RESOURCES, true ) ) { return self::error( 'unknown_resource', 'This dashboard resource is unavailable.', 404 ); }
+		if ( 'coupons' === $resource ) { return self::coupon_record( $request, $id ); }
 		if ( in_array( $resource, array( 'orders', 'shipments', 'products', 'customers' ), true ) && ! class_exists( 'WooCommerce' ) ) { return self::error( 'woocommerce_unavailable', 'WooCommerce is unavailable. Business data was not loaded.', 503 ); }
 		if ( 'shipments' === $resource && ! class_exists( 'Epic_VTP_Order_Meta_Box' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipment records are unavailable.', 503 ); }
 		if ( 'orders' === $resource && function_exists( 'wc_get_order' ) ) {
@@ -1360,6 +1365,7 @@ final class Epic_Admin_Dashboard {
 					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
 					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
+					'shipment' => self::order_shipment_summary( $order ),
 					'revision' => self::order_revision( $order ),
 				) );
 			}
@@ -1590,6 +1596,28 @@ final class Epic_Admin_Dashboard {
 			return (string) epic_order_emails_viettelpost_tracking_url( $tracking );
 		}
 		return (string) apply_filters( 'epic_admin_dashboard_viettelpost_tracking_url', 'https://viettelpost.com.vn/tra-cuu-hanh-trinh-don/?billcode=' . rawurlencode( $tracking ), $tracking );
+	}
+
+	/**
+	 * Compact ViettelPost shipment summary for the order detail sidebar.
+	 * Returns null when the order has no shipment (or the courier plugin is
+	 * absent), so the order screen can degrade gracefully.
+	 */
+	private static function order_shipment_summary( $order ) {
+		if ( ! class_exists( 'Epic_VTP_Client' ) || ! class_exists( 'Epic_VTP_Order_Meta_Box' ) ) { return null; }
+		$tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+		$code     = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS );
+		if ( '' === $tracking && '' === $code ) { return null; }
+		return array(
+			'tracking' => $tracking,
+			'tracking_url' => self::shipment_tracking_url( $tracking ),
+			'status' => '' !== $code ? Epic_VTP_Client::status_label( $code ) : '',
+			'status_code' => $code,
+			'status_date' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS_DATE ),
+			'expected_delivery' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_EXPECTED ),
+			'last_synced' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_LAST_SYNCED ),
+			'needs_action' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION ),
+		);
 	}
 
 	/**

@@ -1,4 +1,6 @@
-# EPIC Admin Dashboard API — security release 0.1.8
+# EPIC Admin Dashboard API — release 0.1.9
+
+Version 0.1.9 fixes coupon collection reads and keeps single-coupon reads/updates on the ID-specific route. Coupon list requests now reach the collection handler instead of failing with “Coupon not found.”
 
 The private ops BFF remains the only cross-host client of `epic-admin/v1`. Browser requests from other origins are rejected and this namespace does not emit CORS permission. Other storefront namespaces are unchanged.
 
