@@ -909,6 +909,7 @@ final class Epic_Admin_Dashboard {
 		$province_name = sanitize_text_field( (string) ( $input['province_name'] ?? $input['city'] ?? '' ) );
 		$province_id = absint( $input['province_id'] ?? 0 );
 		$ward_id = absint( $input['ward_id'] ?? 0 );
+		$ward_name = sanitize_text_field( (string) ( $input['ward_name'] ?? '' ) );
 		$postcode = sanitize_text_field( (string) ( $input['postcode'] ?? '' ) );
 		if ( '' === trim( $first_name . ' ' . $last_name ) ) { return self::error( 'customer_name_required', 'Enter the customer name.' ); }
 		if ( ! preg_match( '/^[0-9+().\-\s]{8,20}$/', $phone ) ) { return self::error( 'customer_phone_required', 'Enter a valid customer phone number.' ); }
@@ -963,7 +964,7 @@ final class Epic_Admin_Dashboard {
 		if ( strlen( $note ) > 4000 ) { return self::error( 'invalid_note', 'Order notes must be under 4,000 characters.' ); }
 		return array(
 			'action' => $action, 'order_id' => $order_id, 'expected_revision' => $expected_revision,
-			'customer' => array( 'first_name' => $first_name, 'last_name' => $last_name, 'phone' => $phone, 'email' => $email, 'address_1' => $address_1, 'address_2' => $address_2, 'province_id' => $province_id, 'province_name' => $province_name, 'ward_id' => $ward_id, 'postcode' => $postcode ),
+			'customer' => array( 'first_name' => $first_name, 'last_name' => $last_name, 'phone' => $phone, 'email' => $email, 'address_1' => $address_1, 'address_2' => $address_2, 'province_id' => $province_id, 'province_name' => $province_name, 'ward_id' => $ward_id, 'ward_name' => $ward_name, 'postcode' => $postcode ),
 			'fulfillment' => $fulfillment, 'shipping_fee' => $shipping_fee, 'items' => $items, 'coupon_codes' => $coupon_codes,
 			'manual_discount' => $manual_discount, 'fee_lines' => $fee_lines, 'note' => $note,
 		);
@@ -1041,9 +1042,28 @@ final class Epic_Admin_Dashboard {
 
 	private static function fill_direct_order( $order, $draft, $computed ) {
 		$customer = $draft['customer'];
-		$address = array( 'first_name' => $customer['first_name'], 'last_name' => $customer['last_name'], 'address_1' => $customer['address_1'], 'address_2' => $customer['address_2'], 'city' => $customer['province_name'], 'state' => $customer['province_name'], 'postcode' => $customer['postcode'], 'country' => 'VN', 'phone' => $customer['phone'], 'email' => $customer['email'] );
-		$order->set_address( $address, 'billing' );
-		$order->set_address( $address, 'shipping' );
+		$ward_name = isset( $customer['ward_name'] ) ? (string) $customer['ward_name'] : '';
+		$extra = (string) $customer['address_2'];
+		$street = (string) $customer['address_1'];
+		// The structured picker puts the ward in address_2 (the WooCommerce field
+		// staff and the courier plugin read). A separately entered supplementary
+		// address is folded into the street line so nothing is lost.
+		$address_2 = '' !== $ward_name ? $ward_name : $extra;
+		if ( '' !== $ward_name && '' !== $extra ) { $street = rtrim( $street ) . ', ' . $extra; }
+		$address = array(
+			'first_name' => $customer['first_name'], 'last_name' => $customer['last_name'], 'company' => '',
+			'address_1' => $street, 'address_2' => $address_2,
+			'city' => $customer['province_name'], 'state' => $customer['province_name'],
+			'postcode' => $customer['postcode'], 'country' => 'VN',
+			'phone' => $customer['phone'], 'email' => $customer['email'],
+		);
+		// Use the CRUD address setters (HPOS-safe). The legacy set_address()
+		// writes raw postmeta and is the source of the empty-address/empty-order
+		// failure on custom order tables.
+		if ( is_callable( array( $order, 'set_billing_address' ) ) ) { $order->set_billing_address( $address ); }
+		else { $order->set_address( $address, 'billing' ); }
+		if ( is_callable( array( $order, 'set_shipping_address' ) ) ) { $order->set_shipping_address( $address ); }
+		else { $order->set_address( $address, 'shipping' ); }
 		if ( is_callable( array( $order, 'set_shipping_phone' ) ) ) { $order->set_shipping_phone( $customer['phone'] ); }
 		if ( '' !== $customer['email'] && function_exists( 'email_exists' ) ) {
 			$user_id = email_exists( $customer['email'] );
@@ -1101,6 +1121,7 @@ final class Epic_Admin_Dashboard {
 		$order->update_meta_data( self::META_CREATED_BY, get_current_user_id() );
 		if ( $customer['province_id'] ) { $order->update_meta_data( '_epic_vtp_province_id', $customer['province_id'] ); }
 		if ( $customer['ward_id'] ) { $order->update_meta_data( '_epic_ward_id', $customer['ward_id'] ); }
+		if ( '' !== $ward_name ) { $order->update_meta_data( '_epic_ward_name', $ward_name ); }
 		$order->calculate_totals();
 		$order->save();
 		$notes = array( 'Tạo từ EPIC Admin — đơn trực tiếp (điện thoại/Zalo).' );
@@ -1111,15 +1132,47 @@ final class Epic_Admin_Dashboard {
 		return true;
 	}
 
+	private static function direct_order_is_persisted( $order_id ) {
+		$order_id = absint( $order_id );
+		if ( $order_id < 1 || ! function_exists( 'wc_get_order' ) ) { return false; }
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) { return false; }
+		if ( (int) $order->get_item_count( 'line_item' ) < 1 ) { return false; }
+		if ( '' === trim( (string) $order->get_billing_first_name() . ' ' . (string) $order->get_billing_last_name() ) ) { return false; }
+		if ( '' === (string) $order->get_billing_phone() ) { return false; }
+		if ( '' === (string) $order->get_billing_address_1() ) { return false; }
+		return true;
+	}
+
 	private static function create_direct_order_from_draft( $draft, $computed ) {
 		$order = wc_create_order( array( 'created_via' => 'epic-admin' ) );
 		if ( is_wp_error( $order ) ) { return self::error( 'order_create_failed', 'The order could not be created.', 500 ); }
-		$result = self::fill_direct_order( $order, $draft, $computed );
-		if ( is_wp_error( $result ) ) { $order->delete( true ); return $result; }
-		$order->update_status( 'on-hold', 'Tạo đơn trực tiếp (điện thoại/Zalo) từ EPIC Admin.' );
-		if ( function_exists( 'wc_reduce_stock_levels' ) ) { wc_reduce_stock_levels( $order->get_id() ); }
-		self::log( 'order.create', 'orders', (string) $order->get_id(), array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
-		return array( 'ok' => true, 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
+		$order_id = (int) $order->get_id();
+		try {
+			$result = self::fill_direct_order( $order, $draft, $computed );
+			if ( is_wp_error( $result ) ) { $order->delete( true ); return $result; }
+			$order->update_status( 'on-hold', 'Tạo đơn trực tiếp (điện thoại/Zalo) từ EPIC Admin.' );
+		} catch ( \Throwable $e ) {
+			// WC_Order::save() catches Exceptions raised by save hooks; a Throwable
+			// escaping here means the write genuinely failed mid-way.
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d failed: %s', $order_id, $e->getMessage() ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			$order->delete( true );
+			self::log( 'order.create', 'orders', (string) $order_id, array( 'source', 'items', 'customer' ), 'failed' );
+			return self::error( 'order_save_failed', 'Không lưu được đơn hàng. Vui lòng thử lại.', 500 );
+		}
+		// WC_Order::save() can silently swallow an Exception from a save hook and
+		// leave an empty order behind (this was the direct-order "empty order"
+		// bug). Re-read the persisted order and roll it back instead of reporting
+		// a false success.
+		if ( ! self::direct_order_is_persisted( $order_id ) ) {
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d was created but did not persist (no items/address); rolled back.', $order_id ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			$order->delete( true );
+			self::log( 'order.create', 'orders', (string) $order_id, array( 'source', 'items', 'customer' ), 'failed' );
+			return self::error( 'order_save_failed', 'Đơn hàng không lưu được sản phẩm hoặc địa chỉ. Vui lòng kiểm tra Nhật ký WooCommerce (WooCommerce → Trạng thái → Nhật ký) rồi thử lại.', 500 );
+		}
+		if ( function_exists( 'wc_reduce_stock_levels' ) ) { wc_reduce_stock_levels( $order_id ); }
+		self::log( 'order.create', 'orders', (string) $order_id, array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
+		return array( 'ok' => true, 'id' => $order_id, 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
 	}
 
 	private static function update_direct_order_from_draft( $draft, $computed ) {
@@ -1127,10 +1180,20 @@ final class Epic_Admin_Dashboard {
 		if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
 		if ( ! self::is_direct_order( $order ) ) { return self::error( 'not_direct_order', 'Only direct orders can be edited here.', 403 ); }
 		if ( ! hash_equals( self::order_revision( $order ), (string) $draft['expected_revision'] ) ) { return self::error( 'revision_conflict', 'This order changed after you opened it. Reload before saving.', 409 ); }
-		$result = self::fill_direct_order( $order, $draft, $computed );
-		if ( is_wp_error( $result ) ) { return $result; }
-		self::log( 'order.update', 'orders', (string) $order->get_id(), array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
-		return array( 'ok' => true, 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
+		$order_id = (int) $order->get_id();
+		try {
+			$result = self::fill_direct_order( $order, $draft, $computed );
+			if ( is_wp_error( $result ) ) { return $result; }
+		} catch ( \Throwable $e ) {
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d update failed: %s', $order_id, $e->getMessage() ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			return self::error( 'order_save_failed', 'Không lưu được thay đổi của đơn hàng. Vui lòng thử lại.', 500 );
+		}
+		if ( ! self::direct_order_is_persisted( $order_id ) ) {
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d update did not persist.', $order_id ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			return self::error( 'order_save_failed', 'Thay đổi chưa được lưu (thiếu sản phẩm hoặc địa chỉ). Vui lòng kiểm tra Nhật ký WooCommerce rồi thử lại.', 500 );
+		}
+		self::log( 'order.update', 'orders', (string) $order_id, array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
+		return array( 'ok' => true, 'id' => $order_id, 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
 	}
 
 	private static function finance_filters( $request ) {
@@ -1361,6 +1424,9 @@ final class Epic_Admin_Dashboard {
 					'shipping' => $order->get_address( 'shipping' ),
 					'source' => (string) $order->get_meta( self::META_SOURCE ),
 					'fulfillment' => (string) $order->get_meta( self::META_FULFILLMENT ),
+					'province_id' => (int) $order->get_meta( '_epic_vtp_province_id' ),
+					'ward_id' => (int) $order->get_meta( '_epic_ward_id' ),
+					'ward_name' => (string) $order->get_meta( '_epic_ward_name' ),
 					'shipping_fee' => $order->get_shipping_total(),
 					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
 					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
@@ -1420,6 +1486,7 @@ final class Epic_Admin_Dashboard {
 				'cod_amount' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT ),
 				'courier_fee' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_FEE ),
 				'quoted_shipping' => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+				'cost_breakdown' => self::shipment_cost_breakdown( $order ),
 				'needs_action' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION ),
 				'recipient_name' => $recipient_name,
 				'recipient_phone' => $recipient_phone,
@@ -1661,6 +1728,81 @@ final class Epic_Admin_Dashboard {
 			$events[] = array( 'status' => $match[1], 'date' => $date, 'note' => $text );
 		}
 		return array_reverse( $events );
+	}
+
+	/**
+	 * Itemized ViettelPost shipping-cost breakdown for the shipment detail.
+	 *
+	 * Reads `_vtp_cost_breakdown`, written by the courier plugin's webhook on
+	 * every status event. For shipments booked before that meta existed,
+	 * backfills once from ViettelPost's server-side push history (there is no
+	 * order-detail API), caches the result and seeds the journey timeline.
+	 * Read-only and best-effort: returns null on any failure so the detail
+	 * never breaks.
+	 */
+	private static function shipment_cost_breakdown( $order ) {
+		// Literal meta key (not the courier plugin's constant) so an older
+		// epic-viettelpost-shipping that predates the constant can't fatal.
+		$stored = $order->get_meta( '_vtp_cost_breakdown' );
+		if ( is_array( $stored ) && $stored ) {
+			return $stored;
+		}
+		return self::backfill_shipment_from_push_history( $order );
+	}
+
+	/**
+	 * Fetches ViettelPost's push history for the order's waybill and caches the
+	 * cost breakdown (+ journey events) into order meta. Returns the breakdown
+	 * or null. Never throws.
+	 */
+	private static function backfill_shipment_from_push_history( $order ) {
+		$tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+		if ( '' === $tracking || ! class_exists( 'Epic_VTP_Client' ) || ! method_exists( 'Epic_VTP_Client', 'get_push_history' ) ) {
+			return null;
+		}
+
+		$records = Epic_VTP_Client::get_push_history( $tracking );
+		if ( is_wp_error( $records ) || ! is_array( $records ) ) {
+			return null;
+		}
+
+		$latest = null;
+		$events = array();
+		foreach ( $records as $record ) {
+			$data = ( is_array( $record ) && isset( $record['body']['DATA'] ) && is_array( $record['body']['DATA'] ) ) ? $record['body']['DATA'] : null;
+			if ( ! $data ) {
+				continue;
+			}
+			if ( null === $latest ) {
+				$latest = $data; // Records are newest-first.
+			}
+			$events[] = array(
+				'status' => isset( $data['ORDER_STATUS'] ) ? (string) $data['ORDER_STATUS'] : '',
+				'date'   => isset( $data['ORDER_STATUSDATE'] ) ? sanitize_text_field( (string) $data['ORDER_STATUSDATE'] ) : '',
+				'note'   => isset( $data['NOTE'] ) ? sanitize_text_field( (string) $data['NOTE'] ) : '',
+			);
+		}
+
+		if ( null === $latest || ! method_exists( 'Epic_VTP_Client', 'parse_cost_breakdown' ) ) {
+			return null;
+		}
+
+		$breakdown = Epic_VTP_Client::parse_cost_breakdown( $latest );
+		if ( ! is_array( $breakdown ) || ! $breakdown ) {
+			return null;
+		}
+
+		$order->update_meta_data( '_vtp_cost_breakdown', $breakdown );
+
+		// Seed the structured journey (stored oldest-first) only when absent so
+		// richer webhook-collected history is never clobbered.
+		$existing = $order->get_meta( '_vtp_tracking_history' );
+		if ( ! is_array( $existing ) || ! $existing ) {
+			$order->update_meta_data( '_vtp_tracking_history', array_reverse( $events ) );
+		}
+
+		$order->save();
+		return $breakdown;
 	}
 
 	private static function shipment_reconciliation_state( $order_id ) {
