@@ -1365,6 +1365,7 @@ final class Epic_Admin_Dashboard {
 					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
 					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
+					'customer_note' => (string) $order->get_customer_note(),
 					'shipment' => self::order_shipment_summary( $order ),
 					'revision' => self::order_revision( $order ),
 				) );
@@ -1422,6 +1423,7 @@ final class Epic_Admin_Dashboard {
 				'needs_action' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION ),
 				'recipient_name' => $recipient_name,
 				'recipient_phone' => $recipient_phone,
+				'customer_note' => (string) $order->get_customer_note(),
 				'billing' => $order->get_address( 'billing' ),
 				'shipping' => $order->get_address( 'shipping' ),
 				'reconciliation' => self::shipment_reconciliation_state( $id ),
