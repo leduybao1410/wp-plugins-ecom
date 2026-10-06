@@ -4,7 +4,7 @@ Tags: woocommerce, viettelpost, shipping, cod, vietnam
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.1.8
+Stable tag: 0.1.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,20 @@ Log in at viettelpost.vn → Cấu hình tài khoản → Thêm mới token and 
 generated token. Sandbox and production tokens are different.
 
 == Changelog ==
+
+= 0.1.9 =
+* Feature: the status webhook now stores an itemized shipping-cost breakdown
+  (`_vtp_cost_breakdown`) per order — main freight (`MONEY_TOTALFEE`), fuel
+  surcharge (`DETAIL[PXD]`), VAT (`MONEY_TOTALVAT`), total (`MONEY_TOTAL`),
+  COD fee, COD collected, weight, service and payment type — so the admin
+  dashboard can show the courier's actual charge structure.
+* Feature: the webhook also records structured journey events
+  (`_vtp_tracking_history`), so the dashboard timeline no longer depends on
+  parsing WooCommerce order notes.
+* New `Epic_VTP_Client::get_push_history()` reads
+  `/v2/order/list-data-push-his?orderNumber=` so the dashboard can backfill
+  the cost breakdown for shipments created before this release (VTP exposes no
+  order-detail API).
 
 = 0.1.8 =
 * Feature: the ViettelPost waybill note (`ORDER_NOTE`) now includes the

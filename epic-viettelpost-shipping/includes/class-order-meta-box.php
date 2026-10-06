@@ -27,6 +27,10 @@ class Epic_VTP_Order_Meta_Box {
 	const META_PROVINCE_ID    = '_vtp_province_id';
 	const META_PROVINCE_NAME  = '_vtp_province_name';
 	const META_NEEDS_ACTION   = '_vtp_needs_action';
+	/** Structured itemized shipping-cost breakdown from the VTP webhook payload. */
+	const META_COST_BREAKDOWN = '_vtp_cost_breakdown';
+	/** Structured {status,date,note} journey events (newest derived on read). */
+	const META_TRACKING_HISTORY = '_vtp_tracking_history';
 
 	public static function init() {
 		add_action( 'add_meta_boxes', array( __CLASS__, 'add_meta_box' ) );

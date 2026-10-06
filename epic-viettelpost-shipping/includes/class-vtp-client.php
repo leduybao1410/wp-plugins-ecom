@@ -909,6 +909,98 @@ class Epic_VTP_Client {
 	}
 
 	/**
+	 * ViettelPost's server-side push history for a waybill —
+	 * GET /v2/order/list-data-push-his?orderNumber=.
+	 *
+	 * ViettelPost exposes no order-detail API, but it keeps a log of every
+	 * webhook push for the account. Each record's `body.DATA` is the same rich
+	 * payload delivered to the /webhook route (including the MONEY_* cost
+	 * breakdown and the DETAIL[PXD/COD] surcharges). Records are newest-first.
+	 * The admin dashboard backfills the cost breakdown and journey from this
+	 * when an order predates the webhook cost-storage.
+	 *
+	 * @param string $order_number ViettelPost waybill (ORDER_NUMBER).
+	 * @return array|WP_Error List of push records, or WP_Error.
+	 */
+	public static function get_push_history( $order_number ) {
+		$order_number = trim( (string) $order_number );
+		if ( '' === $order_number ) {
+			return new WP_Error( 'epic_vtp_api', __( 'A ViettelPost order number is required.', 'epic-viettelpost-shipping' ) );
+		}
+
+		$data = self::request( '/v2/order/list-data-push-his?orderNumber=' . rawurlencode( $order_number ), 'GET' );
+		if ( is_wp_error( $data ) ) {
+			return $data;
+		}
+		if ( ! is_array( $data ) || empty( $data ) ) {
+			return new WP_Error( 'epic_vtp_api', __( 'ViettelPost returned no push history for this shipment.', 'epic-viettelpost-shipping' ) );
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Normalizes a webhook/push `DATA` payload into the itemized cost
+	 * breakdown the dashboard renders. Returns null when there is nothing
+	 * cost-shaped to store (e.g. an order-number-only acknowledgement).
+	 *
+	 * Amounts are raw integer VND as ViettelPost reports them; derived totals
+	 * (e.g. net COD remittance) are computed on the read side.
+	 *
+	 * @param array $data The webhook DATA array.
+	 * @return array|null
+	 */
+	public static function parse_cost_breakdown( array $data ) {
+		$has_amount = false;
+		foreach ( array( 'MONEY_TOTALFEE', 'MONEY_TOTAL', 'MONEY_TOTALVAT', 'MONEY_COLLECTION' ) as $key ) {
+			if ( isset( $data[ $key ] ) ) {
+				$has_amount = true;
+				break;
+			}
+		}
+		if ( ! $has_amount ) {
+			return null;
+		}
+
+		$detail = array();
+		if ( isset( $data['DETAIL'] ) && is_array( $data['DETAIL'] ) ) {
+			foreach ( $data['DETAIL'] as $row ) {
+				if ( is_array( $row ) && isset( $row['CODE'] ) ) {
+					$detail[ (string) $row['CODE'] ] = isset( $row['VALUE'] ) ? (int) $row['VALUE'] : 0;
+				}
+			}
+		}
+
+		$int = static function ( $key ) use ( $data ) {
+			return isset( $data[ $key ] ) ? (int) $data[ $key ] : 0;
+		};
+
+		$breakdown = array(
+			'main_fee'          => $int( 'MONEY_TOTALFEE' ),
+			'fuel_surcharge'    => isset( $detail['PXD'] ) ? (int) $detail['PXD'] : $int( 'MONEY_FEE' ),
+			'vat'               => $int( 'MONEY_TOTALVAT' ),
+			'total'             => $int( 'MONEY_TOTAL' ),
+			'cod_fee'           => isset( $detail['COD'] ) ? (int) $detail['COD'] : $int( 'MONEY_FEECOD' ),
+			'cod_amount'        => $int( 'MONEY_COLLECTION' ),
+			'cod_amount_origin' => $int( 'MONEY_COLLECTION_ORIGIN' ),
+			'voucher'           => $int( 'VOUCHER_VALUE' ),
+			'weight_g'          => $int( 'PRODUCT_WEIGHT' ),
+			'service'           => isset( $data['ORDER_SERVICE'] ) ? sanitize_text_field( (string) $data['ORDER_SERVICE'] ) : '',
+			'payment_type'      => $int( 'ORDER_PAYMENT' ),
+			'status'            => isset( $data['ORDER_STATUS'] ) ? (string) $data['ORDER_STATUS'] : '',
+			'status_date'       => isset( $data['ORDER_STATUSDATE'] ) ? sanitize_text_field( (string) $data['ORDER_STATUSDATE'] ) : '',
+			'updated_at'        => current_time( 'mysql' ),
+		);
+
+		if ( isset( $data['EMPLOYEE_NAME'] ) && '' !== (string) $data['EMPLOYEE_NAME'] ) {
+			$breakdown['last_courier']       = sanitize_text_field( (string) $data['EMPLOYEE_NAME'] );
+			$breakdown['last_courier_phone'] = isset( $data['EMPLOYEE_PHONE'] ) ? sanitize_text_field( (string) $data['EMPLOYEE_PHONE'] ) : '';
+		}
+
+		return $breakdown;
+	}
+
+	/**
 	 * Normalizes a WooCommerce line-item list into the {PRODUCT_NAME,
 	 * PRODUCT_QUANTITY, PRODUCT_PRICE, PRODUCT_WEIGHT} shape both create
 	 * endpoints expect.

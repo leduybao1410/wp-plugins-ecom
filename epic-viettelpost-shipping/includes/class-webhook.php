@@ -109,6 +109,26 @@ class Epic_VTP_Webhook {
 			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_FEE, (string) (int) $data['MONEY_TOTALFEE'] );
 		}
 
+		// Persist the itemized cost structure ViettelPost reports on every
+		// status event (main freight, fuel surcharge, VAT, total, COD fee +
+		// collected amount, weight, service, payment type). The dashboard's
+		// shipment detail renders this; it is the authoritative breakdown and
+		// avoids a re-query (VTP exposes no order-detail API).
+		$breakdown = Epic_VTP_Client::parse_cost_breakdown( $data );
+		if ( $breakdown ) {
+			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_COST_BREAKDOWN, $breakdown );
+		}
+
+		// Append a structured journey event (idempotent: deduped by
+		// status+date+note) so the dashboard timeline survives even without
+		// the per-status order notes.
+		self::append_tracking_event(
+			$order,
+			$status,
+			$incoming_date,
+			isset( $data['NOTE'] ) ? sanitize_text_field( (string) $data['NOTE'] ) : ''
+		);
+
 		// Only note a genuine change so a repeated callback (ViettelPost
 		// retries) doesn't spam the order timeline.
 		if ( $status !== $previous ) {
@@ -205,5 +225,43 @@ class Epic_VTP_Webhook {
 		);
 
 		return ! empty( $post_ids ) ? wc_get_order( $post_ids[0] ) : false;
+	}
+
+	/**
+	 * Appends one {status,date,note} journey event to the order's structured
+	 * history (oldest first; the dashboard reverses it). ViettelPost retries
+	 * callbacks, so identical events are dropped.
+	 */
+	private static function append_tracking_event( $order, $status, $date, $note ) {
+		if ( '' === (string) $status ) {
+			return;
+		}
+
+		$stored = $order->get_meta( Epic_VTP_Order_Meta_Box::META_TRACKING_HISTORY );
+		$events = is_array( $stored ) ? $stored : array();
+
+		$event = array(
+			'status' => (string) $status,
+			'date'   => (string) $date,
+			'note'   => (string) $note,
+		);
+
+		foreach ( $events as $existing ) {
+			if ( ! is_array( $existing ) ) {
+				continue;
+			}
+			if ( (string) ( $existing['status'] ?? '' ) === $event['status']
+				&& (string) ( $existing['date'] ?? '' ) === $event['date']
+				&& (string) ( $existing['note'] ?? '' ) === $event['note'] ) {
+				return;
+			}
+		}
+
+		$events[] = $event;
+		if ( count( $events ) > 200 ) {
+			$events = array_slice( $events, -200 );
+		}
+
+		$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_TRACKING_HISTORY, $events );
 	}
 }
