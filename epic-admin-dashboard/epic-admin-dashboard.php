@@ -2,7 +2,7 @@
 /**
  * Plugin Name: EPIC Admin Dashboard API
  * Description: Administrator-only session bridge and business API for the EPIC Admin dashboard.
- * Version: 0.2.3
+ * Version: 0.2.4
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Text Domain: epic-admin-dashboard
@@ -10,7 +10,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-define( 'EPIC_ADMIN_DASHBOARD_VERSION', '0.2.3' );
+define( 'EPIC_ADMIN_DASHBOARD_VERSION', '0.2.4' );
 define( 'EPIC_ADMIN_DASHBOARD_DIR', plugin_dir_path( __FILE__ ) );
 require_once EPIC_ADMIN_DASHBOARD_DIR . 'includes/class-epic-admin-dashboard.php';
 require_once EPIC_ADMIN_DASHBOARD_DIR . 'includes/class-epic-admin-security.php';

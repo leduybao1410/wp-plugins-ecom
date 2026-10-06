@@ -873,19 +873,85 @@ final class Epic_Admin_Dashboard {
 		$body = $request->get_json_params();
 		$token = isset( $body['preview_token'] ) ? (string) $body['preview_token'] : '';
 		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,100}$/', $token ) ) { return self::error( 'preview_required', 'Review the order before saving it.', 400 ); }
+		$preview_hash = self::hash( $token );
+		$reservation = self::find_direct_order_receipt( $request, $preview_hash );
+		if ( is_wp_error( $reservation ) ) { return $reservation; }
+		if ( isset( $reservation['replay'] ) ) { return rest_ensure_response( $reservation['replay'] ); }
 		$stored = get_transient( 'epic_admin_order_draft_' . $token );
 		if ( ! is_array( $stored ) || (int) $stored['user_id'] !== get_current_user_id() || empty( $stored['draft'] ) || ! is_array( $stored['draft'] ) ) { return self::error( 'preview_expired', 'This order preview expired. Review the order again.', 409 ); }
-		delete_transient( 'epic_admin_order_draft_' . $token );
 		$draft = $stored['draft'];
 		$computed = self::compute_direct_order( $draft );
 		if ( is_wp_error( $computed ) ) { return $computed; }
-		$reservation = self::reserve_mutation( $request, 'update' === $draft['action'] ? 'order-direct-update:' . absint( $draft['order_id'] ) : 'order-direct-create' );
+		$reservation = self::reserve_direct_order_receipt( $request, $preview_hash );
 		if ( is_wp_error( $reservation ) ) { return $reservation; }
 		if ( isset( $reservation['replay'] ) ) { return rest_ensure_response( $reservation['replay'] ); }
+		$claimed = self::claim_direct_order_preview( $preview_hash );
+		if ( is_wp_error( $claimed ) ) {
+			self::finish_direct_order_receipt( $reservation['hash'], 'failed', $preview_hash, null );
+			return $claimed;
+		}
+		delete_transient( 'epic_admin_order_draft_' . $token );
 		$result = 'update' === $draft['action'] ? self::update_direct_order_from_draft( $draft, $computed ) : self::create_direct_order_from_draft( $draft, $computed );
-		if ( is_wp_error( $result ) ) { self::finish_mutation( $reservation['hash'], 'failed', null ); return $result; }
-		self::finish_mutation( $reservation['hash'], 'success', $result );
+		if ( is_wp_error( $result ) ) { self::finish_direct_order_receipt( $reservation['hash'], 'failed', $preview_hash, null ); return $result; }
+		self::finish_direct_order_receipt( $reservation['hash'], 'success', $preview_hash, $result );
 		return rest_ensure_response( $result );
+	}
+
+	private static function direct_order_receipt_key( $request ) {
+		$key = sanitize_text_field( (string) $request->get_header( 'idempotency-key' ) );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{16,128}$/', $key ) ) { return self::error( 'idempotency_required', 'A unique action key is required for this request.' ); }
+		return self::hash( $key . ':order-direct-apply:' . get_current_user_id() );
+	}
+
+	private static function direct_order_receipt_result( $receipt, $preview_hash ) {
+		if ( ! $receipt ) { return null; }
+		$data = $receipt->response ? json_decode( $receipt->response, true ) : array();
+		if ( ! is_array( $data ) || empty( $data['preview_hash'] ) || ! hash_equals( (string) $data['preview_hash'], $preview_hash ) ) {
+			return self::error( 'idempotency_conflict', 'This Idempotency-Key was already used for a different direct-order preview.', 409 );
+		}
+		if ( 'success' === $receipt->outcome && isset( $data['result'] ) && is_array( $data['result'] ) ) { return array( 'hash' => $receipt->receipt_key, 'replay' => $data['result'] ); }
+		return self::error( 'mutation_reconcile', 'This action already ran or has an uncertain outcome. Refresh the order before retrying.', 409 );
+	}
+
+	private static function find_direct_order_receipt( $request, $preview_hash ) {
+		global $wpdb;
+		$key = self::direct_order_receipt_key( $request );
+		if ( is_wp_error( $key ) ) { return $key; }
+		$table = self::tables()['receipts'];
+		$receipt = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE receipt_key = %s", $key ) );
+		return self::direct_order_receipt_result( $receipt, $preview_hash );
+	}
+
+	private static function reserve_direct_order_receipt( $request, $preview_hash ) {
+		global $wpdb;
+		$key = self::direct_order_receipt_key( $request );
+		if ( is_wp_error( $key ) ) { return $key; }
+		$table = self::tables()['receipts'];
+		$response = wp_json_encode( array( 'preview_hash' => $preview_hash, 'result' => null ) );
+		$inserted = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$table} (receipt_key, user_id, action, outcome, response, created_at) VALUES (%s, %d, %s, %s, %s, %s)", $key, get_current_user_id(), 'order-direct-apply', 'pending', $response, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( 1 === (int) $inserted ) { return array( 'hash' => $key ); }
+		$receipt = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE receipt_key = %s", $key ) );
+		$existing = self::direct_order_receipt_result( $receipt, $preview_hash );
+		if ( null !== $existing ) { return $existing; }
+		return self::error( 'mutation_reservation_failed', 'This action could not be safely reserved. No order was created.', 503 );
+	}
+
+	private static function claim_direct_order_preview( $preview_hash ) {
+		global $wpdb;
+		$table = self::tables()['receipts'];
+		$key = self::hash( $preview_hash . ':order-direct-preview:' . get_current_user_id() );
+		$response = wp_json_encode( array( 'preview_hash' => $preview_hash ) );
+		$inserted = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$table} (receipt_key, user_id, action, outcome, response, created_at) VALUES (%s, %d, %s, %s, %s, %s)", $key, get_current_user_id(), 'order-direct-preview', 'success', $response, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( 1 === (int) $inserted ) { return true; }
+		$existing = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE receipt_key = %s", $key ) );
+		if ( $existing ) { return self::error( 'preview_expired', 'This order preview was already used. Review the order again.', 409 ); }
+		return self::error( 'mutation_reservation_failed', 'This order preview could not be reserved safely. No order was created.', 503 );
+	}
+
+	private static function finish_direct_order_receipt( $key, $outcome, $preview_hash, $result ) {
+		global $wpdb;
+		$response = array( 'preview_hash' => $preview_hash, 'result' => $result );
+		$wpdb->update( self::tables()['receipts'], array( 'outcome' => sanitize_key( $outcome ), 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $key ), array( '%s', '%s' ), array( '%s' ) );
 	}
 
 	private static function normalize_order_draft( $body ) {
@@ -1115,7 +1181,6 @@ final class Epic_Admin_Dashboard {
 		$order->add_item( $shipping );
 		$order->set_payment_method( 'cod' );
 		$order->set_payment_method_title( 'Thanh toán khi nhận hàng (COD)' );
-		$order->set_paid( false );
 		$order->update_meta_data( self::META_SOURCE, self::SOURCE_DIRECT );
 		$order->update_meta_data( self::META_FULFILLMENT, $draft['fulfillment'] );
 		$order->update_meta_data( self::META_CREATED_BY, get_current_user_id() );
