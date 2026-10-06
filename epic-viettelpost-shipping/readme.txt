@@ -4,7 +4,7 @@ Tags: woocommerce, viettelpost, shipping, cod, vietnam
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.1.7
+Stable tag: 0.1.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,14 @@ Log in at viettelpost.vn → Cấu hình tài khoản → Thêm mới token and 
 generated token. Sandbox and production tokens are different.
 
 == Changelog ==
+
+= 0.1.8 =
+* Feature: the ViettelPost waybill note (`ORDER_NOTE`) now includes the
+  order's customer note — the storefront checkout "delivery note" — so
+  guidance typed by the customer is carried onto the shipment. It is
+  combined with the order-number reference, collapsed to one line and capped
+  at 250 characters. Applies to the single-order, bulk and admin-dashboard
+  booking paths.
 
 = 0.1.7 =
 * Fix: the EPIC admin dashboard reported "ViettelPost shipping unavailable"

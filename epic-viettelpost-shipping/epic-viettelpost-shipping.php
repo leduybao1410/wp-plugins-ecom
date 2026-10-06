@@ -3,7 +3,7 @@
  * Plugin Name:       EPIC ViettelPost Shipping Manager
  * Plugin URI:        https://epicroastery.coffee/
  * Description:       ViettelPost shipment booking, cancellation, label printing, and status tracking for WooCommerce orders, mirroring the EPIC GHN Shipping Manager.
- * Version:           0.1.7
+ * Version:           0.1.8
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * WC requires at least: 7.0
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // No direct access.
 }
 
-define( 'EPIC_VTP_VERSION', '0.1.7' );
+define( 'EPIC_VTP_VERSION', '0.1.8' );
 define( 'EPIC_VTP_PLUGIN_FILE', __FILE__ );
 define( 'EPIC_VTP_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_VTP_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
