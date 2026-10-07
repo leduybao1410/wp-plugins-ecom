@@ -604,8 +604,63 @@ final class Epic_Admin_Dashboard {
 		$page = max( 1, absint( $request->get_param( 'page' ) ) );
 		$limit = min( 100, max( 1, absint( $request->get_param( 'per_page' ) ) ?: 25 ) );
 		$table = self::tables()['audit'];
-		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table ORDER BY id DESC LIMIT %d OFFSET %d", $limit, ( $page - 1 ) * $limit ), ARRAY_A );
-		return rest_ensure_response( array( 'items' => $rows, 'page' => $page, 'per_page' => $limit, 'total' => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" ) ) );
+		$where = array(); $values = array();
+		$from = $request->get_param( 'from' ); $to = $request->get_param( 'to' );
+		if ( null !== $from && '' !== $from ) { $date = self::audit_date_boundary( $from ); if ( is_wp_error( $date ) ) { return $date; } $where[] = 'created_at >= %s'; $values[] = $date; }
+		if ( null !== $to && '' !== $to ) { $date = self::audit_date_boundary( $to, true ); if ( is_wp_error( $date ) ) { return $date; } $where[] = 'created_at < %s'; $values[] = $date; }
+		if ( null !== $from && '' !== $from && null !== $to && '' !== $to && $from > $to ) { return self::error( 'invalid_date_range', 'The start date must not be after the end date.', 400 ); }
+		$user_id = $request->get_param( 'user_id' );
+		if ( null !== $user_id && '' !== $user_id ) { if ( ! ctype_digit( (string) $user_id ) || (int) $user_id < 1 ) { return self::error( 'invalid_user_id', 'Choose a valid user.', 400 ); } $where[] = 'user_id = %d'; $values[] = (int) $user_id; }
+		foreach ( array( 'resource', 'action', 'outcome' ) as $field ) {
+			$value = $request->get_param( $field );
+			if ( null !== $value && '' !== $value ) { if ( ! is_string( $value ) || strlen( $value ) > 100 || sanitize_text_field( $value ) !== $value ) { return self::error( 'invalid_audit_filter', 'The audit filter is invalid.', 400 ); } $where[] = "$field = %s"; $values[] = $value; }
+		}
+		$record_id = $request->get_param( 'record_id' );
+		if ( null !== $record_id && '' !== $record_id ) { if ( ! is_string( $record_id ) || strlen( $record_id ) > 100 || sanitize_text_field( $record_id ) !== $record_id ) { return self::error( 'invalid_record_id', 'The record ID is invalid.', 400 ); } $where[] = 'record_id = %s'; $values[] = $record_id; }
+		$where_sql = $where ? ' WHERE ' . implode( ' AND ', $where ) : '';
+		$count_sql = "SELECT COUNT(*) FROM $table$where_sql";
+		$rows_sql = "SELECT * FROM $table$where_sql ORDER BY id DESC LIMIT %d OFFSET %d";
+		$wpdb->last_error = '';
+		$total = (int) ( $values ? $wpdb->get_var( $wpdb->prepare( $count_sql, $values ) ) : $wpdb->get_var( $count_sql ) );
+		if ( $wpdb->last_error ) { return self::error( 'audit_unavailable', 'Audit history could not be loaded.', 503 ); }
+		$row_values = array_merge( $values, array( $limit, ( $page - 1 ) * $limit ) );
+		$wpdb->last_error = '';
+		$rows = $wpdb->get_results( $wpdb->prepare( $rows_sql, $row_values ), ARRAY_A );
+		if ( $wpdb->last_error || ! is_array( $rows ) ) { return self::error( 'audit_unavailable', 'Audit history could not be loaded.', 503 ); }
+		foreach ( $rows as &$row ) { $user = get_user_by( 'id', (int) $row['user_id'] ); $row['user_name'] = $user ? $user->display_name : 'Người dùng #' . (int) $row['user_id']; }
+		unset( $row );
+		$response = array( 'items' => $rows, 'page' => $page, 'per_page' => $limit, 'total' => $total, 'total_pages' => (int) ceil( $total / $limit ) );
+		if ( '1' === (string) $request->get_param( 'include_filters' ) ) { $filters = self::audit_filter_options( $table ); if ( is_wp_error( $filters ) ) { return $filters; } $response['filters'] = $filters; }
+		return rest_ensure_response( $response );
+	}
+
+	private static function audit_date_boundary( $value, $exclusive_end = false ) {
+		if ( ! is_string( $value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) { return self::error( 'invalid_audit_date', 'Dates must use YYYY-MM-DD format.', 400 ); }
+		$timezone = new DateTimeZone( 'Asia/Ho_Chi_Minh' );
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d', $value, $timezone );
+		$errors = DateTimeImmutable::getLastErrors();
+		if ( ! $date || ( $errors && ( $errors['warning_count'] || $errors['error_count'] ) ) || $date->format( 'Y-m-d' ) !== $value ) { return self::error( 'invalid_audit_date', 'Choose a valid calendar date.', 400 ); }
+		if ( $exclusive_end ) { $date = $date->modify( '+1 day' ); }
+		return $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
+	}
+
+	private static function audit_filter_options( $table ) {
+		global $wpdb;
+		$wpdb->last_error = '';
+		$users = $wpdb->get_col( "SELECT DISTINCT user_id FROM $table ORDER BY user_id ASC" );
+		if ( $wpdb->last_error || ! is_array( $users ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$wpdb->last_error = '';
+		$resources = $wpdb->get_col( "SELECT DISTINCT resource FROM $table ORDER BY resource ASC" );
+		if ( $wpdb->last_error || ! is_array( $resources ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$wpdb->last_error = '';
+		$actions = $wpdb->get_col( "SELECT DISTINCT action FROM $table ORDER BY action ASC" );
+		if ( $wpdb->last_error || ! is_array( $actions ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$wpdb->last_error = '';
+		$outcomes = $wpdb->get_col( "SELECT DISTINCT outcome FROM $table ORDER BY outcome ASC" );
+		if ( $wpdb->last_error || ! is_array( $outcomes ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$user_options = array();
+		foreach ( $users as $id ) { $id = (int) $id; $user = get_user_by( 'id', $id ); $user_options[] = array( 'id' => $id, 'name' => $user ? $user->display_name : 'Người dùng #' . $id ); }
+		return array( 'users' => $user_options, 'resources' => array_values( $resources ), 'actions' => array_values( $actions ), 'outcomes' => array_values( $outcomes ) );
 	}
 
 	public static function finance_export( $request ) {
