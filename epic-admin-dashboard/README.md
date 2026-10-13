@@ -1,4 +1,10 @@
-# EPIC Admin Dashboard API — release 0.2.3
+# EPIC Admin Dashboard API — release 0.2.6
+
+Version 0.2.6 adds `POST /shipments/{order_id}/action` with `action: link` for attaching an existing ViettelPost waybill to an unlinked WooCommerce order. It validates waybill uniqueness, records an internal order note and audit event, supports idempotent retries and resolves one uncertain booking receipt without contacting the courier or sending an email. Shipment details can now be fetched directly for an unlinked order ID.
+
+Version 0.2.5 adds filters and total-page metadata to `GET /audit`, including inclusive Vietnam-local date bounds, exact record matching, historical filter choices, and readable actor labels for deleted accounts. The audit table and event-writing behavior are unchanged.
+
+Version 0.2.4 fixes direct COD order persistence and replay safety. The shared create/edit routine leaves WooCommerce payment dates untouched: new orders remain unpaid by default, and edits preserve existing payment history. Direct-order applies now reserve a dedicated receipt before consuming a preview; matching successful requests replay their original result, a reused key with another preview returns `idempotency_conflict`, and a consumed preview cannot be submitted with a fresh key. The existing receipt table is reused without migration. BFF errors preserve a sanitized WordPress error code alongside the message and HTTP status.
 
 Version 0.2.3 completes the direct-order edit path: `fill_direct_order()` also stores `_epic_ward_name`, and `GET /records/orders/{id}` now returns `province_id`, `ward_id` and `ward_name` (from `_epic_vtp_province_id` / `_epic_ward_id` / `_epic_ward_name`) so the dashboard can prefill the structured province/ward picker when reopening a direct order.
 

@@ -492,14 +492,18 @@ final class Epic_Admin_Dashboard {
 		if ( ! class_exists( 'Epic_VTP_Ajax' ) || ! class_exists( 'Epic_VTP_Order_Meta_Box' ) || ! class_exists( 'Epic_VTP_Client' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
 		$body = $request->get_json_params();
 		$action = isset( $body['action'] ) ? sanitize_key( $body['action'] ) : '';
-		if ( ! in_array( $action, array( 'book', 'cancel', 'label', 'status', 'reconcile' ), true ) ) { return self::error( 'invalid_action', 'Unsupported shipment action.' ); }
+		if ( ! in_array( $action, array( 'book', 'cancel', 'label', 'status', 'reconcile', 'link' ), true ) ) { return self::error( 'invalid_action', 'Unsupported shipment action.' ); }
+		if ( 'link' === $action ) { return self::link_existing_shipment( $order_id, $request, $body ); }
 		if ( 'label' === $action ) {
 			$tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
 			if ( ! $tracking ) { return self::error( 'shipment_missing', 'This order has no shipment label.', 404 ); }
+			$settings = Epic_VTP_Client::get_settings();
+			$label_size = isset( $body['label_size'] ) && '' !== (string) $body['label_size'] ? (string) $body['label_size'] : (string) $settings['label_size'];
+			if ( ! in_array( $label_size, array( '1', '2', '100' ), true ) ) { return self::error( 'invalid_label_size', 'Choose a supported label size (A5, A6 or A7).' ); }
+			$show_postage = isset( $body['show_postage'] ) ? (bool) $body['show_postage'] : ( 'yes' === $settings['label_show_postage'] );
 			$token = Epic_VTP_Client::gen_print_token( array( $tracking ) );
 			if ( is_wp_error( $token ) ) { return $token; }
-			$settings = Epic_VTP_Client::get_settings();
-			return rest_ensure_response( array( 'url' => Epic_VTP_Client::print_url( $token, $settings['label_size'], 'yes' === $settings['label_show_postage'] ) ) );
+			return rest_ensure_response( array( 'url' => Epic_VTP_Client::print_url( $token, $label_size, $show_postage ) ) );
 		}
 		if ( 'status' === $action ) {
 			$status = isset( $body['status'] ) ? sanitize_text_field( $body['status'] ) : '';
@@ -596,6 +600,91 @@ final class Epic_Admin_Dashboard {
 			return rest_ensure_response( $response );
 		} finally {
 			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+		}
+	}
+
+	/** Attach a verified existing ViettelPost waybill without contacting the courier. */
+	private static function link_existing_shipment( $order_id, $request, $body ) {
+		global $wpdb;
+		$tracking = isset( $body['tracking'] ) && is_string( $body['tracking'] ) ? strtoupper( trim( sanitize_text_field( $body['tracking'] ) ) ) : '';
+		if ( ! preg_match( '/^[A-Z0-9-]{4,50}$/', $tracking ) ) { return self::error( 'tracking_invalid', 'Enter a valid ViettelPost waybill.', 400 ); }
+		if ( ! isset( $body['confirmed_match'] ) || true !== $body['confirmed_match'] ) { return self::error( 'shipment_confirmation_required', 'Confirm that the ViettelPost shipment matches this order.', 400 ); }
+		$status = isset( $body['status'] ) && is_string( $body['status'] ) ? sanitize_text_field( $body['status'] ) : ( isset( $body['status'] ) ? false : '' );
+		if ( false === $status ) { return self::error( 'invalid_status', 'Choose a supported ViettelPost status.' ); }
+		if ( '' !== $status && ! isset( Epic_VTP_Client::status_map()[ $status ] ) ) { return self::error( 'invalid_status', 'Choose a supported ViettelPost status.' ); }
+		$receipt = sanitize_text_field( (string) $request->get_header( 'idempotency-key' ) );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{16,128}$/', $receipt ) ) { return self::error( 'idempotency_required', 'A unique action key is required before linking a shipment.' ); }
+		$user_id = get_current_user_id();
+		$tables = self::tables();
+		$receipt_hash = self::hash( $receipt . ':link:' . $order_id . ':' . $user_id );
+		$request_hash = hash( 'sha256', wp_json_encode( array( 'tracking' => $tracking, 'status' => $status, 'confirmed_match' => true ) ) );
+		$order_lock = 'epic-admin-shipment-' . $order_id;
+		$tracking_lock = 'epic-admin-vtp-' . substr( hash( 'sha256', $tracking ), 0, 40 );
+		$locked = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $order_lock ) );
+		if ( '1' !== (string) $locked ) { return self::error( 'shipment_busy', 'Another shipment action is being processed. Refresh the order and try again.', 409 ); }
+		$tracking_locked = false;
+		try {
+			$locked = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $tracking_lock ) );
+			if ( '1' !== (string) $locked ) { return self::error( 'shipment_busy', 'This waybill is being linked to another order. Refresh and try again.', 409 ); }
+			$tracking_locked = true;
+			$prior = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tables['receipts']} WHERE receipt_key = %s", $receipt_hash ) );
+			if ( $prior ) {
+				$prior_response = $prior->response ? json_decode( $prior->response, true ) : array();
+				if ( ! isset( $prior_response['request_hash'] ) || ! hash_equals( $prior_response['request_hash'], $request_hash ) ) { return self::error( 'idempotency_conflict', 'This action key was already used with different shipment details.', 409 ); }
+				if ( 'success' === $prior->outcome && $prior->response ) { unset( $prior_response['request_hash'] ); return rest_ensure_response( $prior_response ); }
+				return self::error( 'shipment_link_incomplete', 'This link attempt did not finish. Refresh the order and check its shipment before retrying.', 409 );
+			}
+			$pending = $wpdb->get_results( $wpdb->prepare( "SELECT id, created_at FROM {$tables['receipts']} WHERE action IN (%s, %s) AND outcome = 'pending'", 'shipment-book:' . $order_id, 'shipment-cancel:' . $order_id ) );
+			foreach ( $pending as $row ) {
+				if ( strtotime( $row->created_at . ' UTC' ) > time() - 120 ) { return self::error( 'shipment_busy', 'A courier request is still being processed. Wait briefly, then refresh the order.', 409 ); }
+				$wpdb->update( $tables['receipts'], array( 'outcome' => 'uncertain' ), array( 'id' => (int) $row->id, 'outcome' => 'pending' ), array( '%s' ), array( '%d', '%s' ) );
+			}
+			$unresolved = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$tables['receipts']} WHERE action IN (%s, %s) AND outcome = 'uncertain' ORDER BY id DESC", 'shipment-book:' . $order_id, 'shipment-cancel:' . $order_id ) );
+			if ( count( $unresolved ) > 1 ) { return self::error( 'shipment_reconcile', 'More than one courier action needs reconciliation. Resolve the order in wp-admin before continuing.', 409 ); }
+			if ( $unresolved && 'shipment-book:' . $order_id !== $unresolved[0]->action ) { return self::error( 'shipment_reconcile', 'A previous courier action has an uncertain result. Reconcile it before another action.', 409 ); }
+			$order = wc_get_order( $order_id );
+			if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
+			$current = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+			if ( $current && $current !== $tracking ) { return self::error( 'shipment_exists', 'This order already has a different ViettelPost waybill.', 409 ); }
+			$duplicates = wc_get_orders( array( 'limit' => 2, 'return' => 'ids', 'meta_query' => array( array( 'key' => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, 'value' => $tracking ) ) ) );
+			foreach ( (array) $duplicates as $duplicate_id ) { if ( (int) $duplicate_id !== (int) $order_id ) { return self::error( 'tracking_conflict', 'This waybill is already linked to another order.', 409 ); } }
+			$response = array( 'ok' => true, 'trackingCode' => $tracking, 'already_linked' => ( $current === $tracking ), 'request_hash' => $request_hash );
+			$inserted = $wpdb->insert( $tables['receipts'], array( 'receipt_key' => $receipt_hash, 'user_id' => $user_id, 'action' => 'shipment-link:' . $order_id, 'outcome' => 'pending', 'created_at' => gmdate( 'Y-m-d H:i:s' ) ), array( '%s', '%d', '%s', '%s', '%s' ) );
+			if ( false === $inserted ) { return self::error( 'shipment_receipt_failed', 'The link could not be reserved safely. Refresh the order and try again.', 503 ); }
+			if ( '' !== $current ) {
+				$response['already_linked'] = true;
+			} else {
+				$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, $tracking );
+				if ( '' !== $status ) { $order->update_meta_data( Epic_VTP_Order_Meta_Box::META_STATUS, $status ); }
+				$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT, Epic_VTP_Client::is_cod_order( $order ) ? (string) $order->get_total() : '0' );
+				try { $order->save(); } catch ( Throwable $error ) {
+					$wpdb->update( $tables['receipts'], array( 'outcome' => 'failed', 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $receipt_hash ), array( '%s', '%s' ), array( '%s' ) );
+					return self::error( 'shipment_link_save_failed', 'WooCommerce could not save this shipment link. Refresh the order before retrying.', 500 );
+				}
+				$verified = wc_get_order( $order_id );
+				$verified_tracking = $verified ? (string) $verified->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ) : '';
+				$verified_status = $verified ? (string) $verified->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) : '';
+				$verified_cod = $verified ? (string) $verified->get_meta( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT ) : '';
+				$expected_cod = Epic_VTP_Client::is_cod_order( $order ) ? (string) $order->get_total() : '0';
+				if ( ! $verified || $verified_tracking !== $tracking || ( '' !== $status && $verified_status !== $status ) || $verified_cod !== $expected_cod ) {
+					$wpdb->update( $tables['receipts'], array( 'outcome' => 'failed', 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $receipt_hash ), array( '%s', '%s' ), array( '%s' ) );
+					return self::error( 'shipment_link_verify_failed', 'WooCommerce did not confirm the shipment link. Refresh the order before retrying.', 500 );
+				}
+				$user = get_userdata( $user_id );
+				$actor = $user ? $user->display_name : sprintf( 'user #%d', $user_id );
+				$verified->add_order_note( sprintf( 'Existing ViettelPost waybill %1$s manually linked by %2$s after order and shipment details were verified in ViettelPost.', $tracking, $actor ) );
+			}
+			if ( $unresolved ) {
+				$booking = $unresolved[0];
+				$wpdb->update( $tables['receipts'], array( 'outcome' => 'success', 'response' => wp_json_encode( array( 'ok' => true, 'shipment_exists' => true, 'trackingCode' => $tracking ) ) ), array( 'id' => (int) $booking->id, 'outcome' => 'uncertain' ), array( '%s', '%s' ), array( '%d', '%s' ) );
+			}
+			$wpdb->update( $tables['receipts'], array( 'outcome' => 'success', 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $receipt_hash, 'outcome' => 'pending' ), array( '%s', '%s' ), array( '%s', '%s' ) );
+			if ( empty( $response['already_linked'] ) ) { self::log( 'shipment.link', 'shipments', (string) $order_id, array( '_vtp_order_number', '_vtp_shipment_status', '_vtp_cod_amount' ), 'success' ); }
+			unset( $response['request_hash'] );
+			return rest_ensure_response( $response );
+		} finally {
+			if ( $tracking_locked ) { $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $tracking_lock ) ); }
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $order_lock ) );
 		}
 	}
 
@@ -1538,6 +1627,7 @@ final class Epic_Admin_Dashboard {
 					'total' => $order->get_total(),
 					'currency' => $order->get_currency(),
 					'payment_method' => $order->get_payment_method_title(),
+					'is_cod' => class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::is_cod_order( $order ) : false,
 					'transaction_id' => $order->get_transaction_id(),
 					'paid_at' => $order->get_date_paid() ? $order->get_date_paid()->date( DATE_ATOM ) : null,
 					'billing' => $order->get_address( 'billing' ),
@@ -1553,6 +1643,7 @@ final class Epic_Admin_Dashboard {
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
 					'customer_note' => (string) $order->get_customer_note(),
 					'shipment' => self::order_shipment_summary( $order ),
+					'shipment_status_options' => class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::status_map() : array(),
 					'revision' => self::order_revision( $order ),
 				) );
 			}
@@ -1598,6 +1689,7 @@ final class Epic_Admin_Dashboard {
 				'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ),
 				'shipment_status_code' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ),
 				'status_options' => Epic_VTP_Client::status_map(),
+				'label_options' => self::shipment_label_options(),
 				'status_date' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS_DATE ),
 				'expected_delivery' => $order->get_meta( Epic_VTP_Order_Meta_Box::META_EXPECTED ),
 				'last_synced' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_LAST_SYNCED ),
@@ -1785,6 +1877,23 @@ final class Epic_Admin_Dashboard {
 			return (string) epic_order_emails_viettelpost_tracking_url( $tracking );
 		}
 		return (string) apply_filters( 'epic_admin_dashboard_viettelpost_tracking_url', 'https://viettelpost.com.vn/tra-cuu-hanh-trinh-don/?billcode=' . rawurlencode( $tracking ), $tracking );
+	}
+
+	/**
+	 * Label print choices for the shipment detail dialog. ViettelPost prints a
+	 * digitalized label from the plugin-wide epic_vtp_label_size /
+	 * epic_vtp_label_show_postage options; the dashboard preselects those saved
+	 * defaults while still allowing a per-print override on action=label.
+	 */
+	private static function shipment_label_options() {
+		$settings = class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::get_settings() : array();
+		$default_size = isset( $settings['label_size'] ) ? (string) $settings['label_size'] : '1';
+		if ( ! in_array( $default_size, array( '1', '2', '100' ), true ) ) { $default_size = '1'; }
+		return array(
+			'sizes' => array( '1' => 'A5', '2' => 'A6', '100' => 'A7' ),
+			'default_size' => $default_size,
+			'default_show_postage' => ! isset( $settings['label_show_postage'] ) || 'yes' === $settings['label_show_postage'],
+		);
 	}
 
 	/**
