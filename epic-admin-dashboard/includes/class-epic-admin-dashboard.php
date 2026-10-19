@@ -115,6 +115,7 @@ final class Epic_Admin_Dashboard {
 		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)/read', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'support_mark_read' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)/notes', array( 'methods' => array( 'GET', 'POST' ), 'callback' => array( __CLASS__, 'support_notes' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/support/summary', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_summary' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/export', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_export' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/support/health', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_health' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 	}
 
@@ -316,6 +317,50 @@ final class Epic_Admin_Dashboard {
 		$cleanup_scheduled = (bool) wp_next_scheduled( 'epic_support_chat_purge' );
 		$cleanup_overdue = ! $last || strtotime( $last . ' UTC' ) < time() - 2 * HOUR_IN_SECONDS;
 		return rest_ensure_response( array( 'ready' => $dependency_ready && $tables_ready && Epic_Support_Chat_Store::DB_VERSION === $schema_version && $cleanup_scheduled, 'schemaVersion' => $schema_version, 'tablesReady' => $tables_ready, 'dependencyReady' => $dependency_ready, 'cleanupScheduled' => $cleanup_scheduled, 'lastCleanupAt' => $last ?: null, 'cleanupOverdue' => $cleanup_overdue ) );
+	}
+
+	/** Download a redacted archive or review-ready JSONL training candidate file. */
+	public static function support_export( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$format = sanitize_key( (string) $request->get_param( 'format' ) );
+		if ( ! in_array( $format, array( 'backup', 'training' ), true ) ) { return self::error( 'invalid_support_export_format', 'Choose backup or training export format.', 400 ); }
+		$from = self::support_date( $request->get_param( 'from' ), false ); if ( is_wp_error( $from ) ) { return $from; }
+		$to = self::support_date( $request->get_param( 'to' ), true ); if ( is_wp_error( $to ) ) { return $to; }
+		$where = array( 'c.expires_at > %s' ); $values = array( gmdate( 'Y-m-d H:i:s' ) );
+		if ( $from ) { $where[] = 't.started_at >= %s'; $values[] = $from; }
+		if ( $to ) { $where[] = 't.started_at <= %s'; $values[] = $to; }
+		if ( 'training' === $format ) { $where[] = "t.outcome = 'answered'"; $where[] = "t.response_kind IN ('faq', 'products')"; }
+		$clause = implode( ' AND ', $where );
+		$count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE $clause", $values ) );
+		if ( $count > 2000 ) { return self::error( 'support_export_too_large', 'Narrow the date range to export at most 2,000 turns at a time.', 413 ); }
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT c.id conversation_id, c.locale, c.status, c.created_at conversation_created_at, c.last_activity_at, c.expires_at, t.id turn_id, t.user_text, t.response_text, t.response_kind, t.outcome, t.cards, t.started_at, t.completed_at, t.duration_ms FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE $clause ORDER BY c.id ASC, t.id ASC LIMIT 2000", $values ), ARRAY_A );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Support archive could not be exported.', 503 ); }
+		if ( 'training' === $format ) {
+			$lines = array();
+			foreach ( $rows as $row ) {
+				$lines[] = wp_json_encode( array(
+					'messages' => array( array( 'role' => 'user', 'content' => Epic_Support_Chat_Store::redact( $row['user_text'], 4000 ) ), array( 'role' => 'assistant', 'content' => Epic_Support_Chat_Store::redact( (string) $row['response_text'], 4000 ) ) ),
+					'locale' => sanitize_key( $row['locale'] ), 'category' => sanitize_key( $row['response_kind'] ),
+					'source' => array( 'conversation_id' => (int) $row['conversation_id'], 'turn_id' => (int) $row['turn_id'], 'started_at' => $row['started_at'] ),
+				), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			}
+			$content = empty( $lines ) ? '' : implode( "\n", $lines ) . "\n";
+			$filename = 'epic-support-training-' . gmdate( 'Y-m-d' ) . '.jsonl';
+		} else {
+			$conversations = array();
+			foreach ( $rows as $row ) {
+				$id = (int) $row['conversation_id'];
+				if ( ! isset( $conversations[ $id ] ) ) {
+					$conversations[ $id ] = array( 'id' => $id, 'visitor' => 'Khách #' . $id, 'locale' => sanitize_key( $row['locale'] ), 'status' => sanitize_key( $row['status'] ), 'created_at' => $row['conversation_created_at'], 'last_activity_at' => $row['last_activity_at'], 'expires_at' => $row['expires_at'], 'turns' => array() );
+				}
+				$conversations[ $id ]['turns'][] = array( 'id' => (int) $row['turn_id'], 'user_text' => Epic_Support_Chat_Store::redact( $row['user_text'], 4000 ), 'response_text' => Epic_Support_Chat_Store::redact( (string) $row['response_text'], 4000 ), 'response_kind' => sanitize_key( $row['response_kind'] ), 'outcome' => sanitize_key( $row['outcome'] ), 'cards' => $row['cards'] ? Epic_Support_Chat_Store::normalize_cards( json_decode( $row['cards'], true ) ) : null, 'started_at' => $row['started_at'], 'completed_at' => $row['completed_at'], 'duration_ms' => null === $row['duration_ms'] ? null : (int) $row['duration_ms'] );
+			}
+			$content = wp_json_encode( array( 'format' => 'epic-support-backup-v1', 'exported_at' => gmdate( 'Y-m-d H:i:s' ), 'retention_days' => Epic_Support_Chat_Store::RETENTION_DAYS, 'conversations' => array_values( $conversations ) ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			$filename = 'epic-support-backup-' . gmdate( 'Y-m-d' ) . '.json';
+		}
+		self::log( 'support.export', 'support_export', $format, array( 'format', 'rows:' . count( $rows ) ), 'success' );
+		return rest_ensure_response( array( 'filename' => $filename, 'content_type' => 'training' === $format ? 'application/x-ndjson' : 'application/json', 'data_base64' => base64_encode( (string) $content ), 'rows' => count( $rows ) ) );
 	}
 
 	public static function create_grant( $request ) {
