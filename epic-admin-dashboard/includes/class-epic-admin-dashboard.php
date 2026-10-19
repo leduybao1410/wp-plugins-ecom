@@ -110,6 +110,212 @@ final class Epic_Admin_Dashboard {
 		register_rest_route( self::NS, '/address/wards', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'address_wards' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/orders/preview', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'order_preview' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/orders/apply', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'order_apply' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_conversations' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)', array( 'methods' => array( 'GET', 'PATCH', 'DELETE' ), 'callback' => array( __CLASS__, 'support_conversation' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)/read', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'support_mark_read' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)/notes', array( 'methods' => array( 'GET', 'POST' ), 'callback' => array( __CLASS__, 'support_notes' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/summary', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_summary' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/health', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_health' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+	}
+
+	private static function support_tables() {
+		if ( ! class_exists( 'Epic_Support_Chat_Store' ) ) { return self::error( 'support_unavailable', 'Support conversations are unavailable.', 503 ); }
+		return Epic_Support_Chat_Store::tables();
+	}
+
+	private static function support_page( $request, $default = 25 ) {
+		$page = max( 1, min( 100000, absint( $request->get_param( 'page' ) ) ?: 1 ) );
+		$per_page = absint( $request->get_param( 'per_page' ) ) ?: $default;
+		return array( $page, max( 1, min( 100, $per_page ) ) );
+	}
+
+	private static function support_date( $value, $end = false ) {
+		if ( null === $value || '' === $value ) { return null; }
+		if ( ! is_string( $value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) { return self::error( 'invalid_support_date', 'Dates must use YYYY-MM-DD format.', 400 ); }
+		$parts = array_map( 'intval', explode( '-', $value ) );
+		if ( ! checkdate( $parts[1], $parts[2], $parts[0] ) ) { return self::error( 'invalid_support_date', 'Choose a valid calendar date.', 400 ); }
+		$zone = new DateTimeZone( 'Asia/Ho_Chi_Minh' );
+		$date = new DateTimeImmutable( $value . ( $end ? ' 23:59:59.999999' : ' 00:00:00' ), $zone );
+		return $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
+	}
+
+	private static function support_filters( $request, $alias = 'c' ) {
+		$where = array( "$alias.expires_at > %s" );
+		$values = array( gmdate( 'Y-m-d H:i:s' ) );
+		$status = sanitize_key( (string) $request->get_param( 'status' ) );
+		if ( '' !== $status && 'all' !== $status ) {
+			if ( ! in_array( $status, array( 'open', 'resolved' ), true ) ) { return self::error( 'invalid_support_filter', 'Choose a supported conversation status.', 400 ); }
+			$where[] = "$alias.status = %s"; $values[] = $status;
+		}
+		$locale = sanitize_key( (string) $request->get_param( 'locale' ) );
+		if ( '' !== $locale ) {
+			if ( ! in_array( $locale, array( 'vi', 'en', 'ru', 'hi', 'zh', 'ko', 'ja' ), true ) ) { return self::error( 'invalid_support_filter', 'Choose a supported language.', 400 ); }
+			$where[] = "$alias.locale = %s"; $values[] = $locale;
+		}
+		$category = sanitize_key( (string) $request->get_param( 'category' ) );
+		if ( '' !== $category ) {
+			if ( ! in_array( $category, array( 'faq', 'order', 'products', 'fallback', 'budget', 'error', 'pending' ), true ) ) { return self::error( 'invalid_support_filter', 'Choose a supported response category.', 400 ); }
+			$where[] = "EXISTS (SELECT 1 FROM " . Epic_Support_Chat_Store::tables()['turns'] . " sc WHERE sc.conversation_id = $alias.id AND sc.response_kind = %s)"; $values[] = $category;
+		}
+		foreach ( array( 'from' => false, 'to' => true ) as $key => $end ) {
+			$date = self::support_date( $request->get_param( $key ), $end );
+			if ( is_wp_error( $date ) ) { return $date; }
+			if ( null !== $date ) { $where[] = "$alias.last_activity_at " . ( $end ? '<=' : '>=' ) . ' %s'; $values[] = $date; }
+		}
+		$search = $request->get_param( 'search' );
+		if ( null !== $search && '' !== $search ) {
+			if ( ! is_string( $search ) || strlen( $search ) > 100 ) { return self::error( 'invalid_support_search', 'Search text is too long.', 400 ); }
+			$like = '%' . $GLOBALS['wpdb']->esc_like( sanitize_text_field( $search ) ) . '%';
+			$where[] = "EXISTS (SELECT 1 FROM " . Epic_Support_Chat_Store::tables()['turns'] . " sx WHERE sx.conversation_id = $alias.id AND (sx.user_text LIKE %s OR sx.response_text LIKE %s))";
+			$values[] = $like; $values[] = $like;
+		}
+		$unread = $request->get_param( 'unread' );
+		if ( null !== $unread && '' !== $unread ) {
+			if ( ! in_array( (string) $unread, array( 'true', 'false', '1', '0' ), true ) ) { return self::error( 'invalid_support_filter', 'Unread filter is invalid.', 400 ); }
+			$read = "COALESCE((SELECT sr.read_version FROM " . Epic_Support_Chat_Store::tables()['reads'] . " sr WHERE sr.conversation_id = $alias.id AND sr.user_id = " . (int) get_current_user_id() . '), 0)';
+			$where[] = ( in_array( (string) $unread, array( 'true', '1' ), true ) ? "$alias.activity_version > $read" : "$alias.activity_version <= $read" );
+		}
+		return array( 'where' => implode( ' AND ', $where ), 'values' => $values );
+	}
+
+	public static function support_conversations( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$filters = self::support_filters( $request ); if ( is_wp_error( $filters ) ) { return $filters; }
+		list( $page, $per_page ) = self::support_page( $request );
+		$latest = "SELECT t.* FROM {$tables['turns']} t INNER JOIN (SELECT conversation_id, MAX(id) id FROM {$tables['turns']} GROUP BY conversation_id) last_t ON last_t.id = t.id";
+		$sql = "SELECT c.id, c.locale, c.status, c.activity_version, c.created_at, c.last_activity_at, COALESCE(r.read_version, 0) read_version, t.user_text preview, t.response_kind, t.outcome FROM {$tables['conversations']} c LEFT JOIN {$tables['reads']} r ON r.conversation_id = c.id AND r.user_id = %d LEFT JOIN ($latest) t ON t.conversation_id = c.id WHERE {$filters['where']} ORDER BY c.last_activity_at DESC, c.id DESC LIMIT %d OFFSET %d";
+		$params = array_merge( array( (int) get_current_user_id() ), $filters['values'], array( $per_page, ( $page - 1 ) * $per_page ) );
+		$items = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Support conversations could not be loaded.', 503 ); }
+		$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['conversations']} c WHERE {$filters['where']}", $filters['values'] ) );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Support conversations could not be counted.', 503 ); }
+		foreach ( $items as &$item ) {
+			$item['id'] = (int) $item['id']; $item['activity_version'] = (int) $item['activity_version']; $item['unread'] = (int) $item['activity_version'] > (int) $item['read_version'];
+			$item['visitor'] = 'Khách #' . $item['id']; unset( $item['read_version'] );
+		}
+		return rest_ensure_response( array( 'items' => $items, 'total' => (int) $count, 'page' => $page, 'per_page' => $per_page, 'total_pages' => (int) ceil( (int) $count / $per_page ) ) );
+	}
+
+	public static function support_conversation( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$id = absint( $request['id'] );
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT id, locale, status, activity_version, created_at, last_activity_at, expires_at FROM {$tables['conversations']} WHERE id = %d AND expires_at > %s", $id, gmdate( 'Y-m-d H:i:s' ) ), ARRAY_A );
+		if ( ! $row ) { return self::error( 'support_conversation_not_found', 'Support conversation was not found or has expired.', 404 ); }
+		if ( 'GET' === $request->get_method() ) {
+			list( $page, $per_page ) = self::support_page( $request, 50 );
+			$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['turns']} WHERE conversation_id = %d", $id ) );
+			$turns = $wpdb->get_results( $wpdb->prepare( "SELECT id, user_text, response_text, response_kind, outcome, cards, started_at, completed_at, duration_ms FROM {$tables['turns']} WHERE conversation_id = %d ORDER BY id DESC LIMIT %d OFFSET %d", $id, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
+			$incomplete_before = gmdate( 'Y-m-d H:i:s', time() - 120 );
+			foreach ( $turns as &$turn ) { $turn['id'] = (int) $turn['id']; $turn['cards'] = $turn['cards'] ? json_decode( $turn['cards'], true ) : null; $turn['incomplete'] = 'pending' === $turn['outcome'] && $turn['started_at'] <= $incomplete_before; if ( null !== $turn['duration_ms'] ) { $turn['duration_ms'] = (int) $turn['duration_ms']; } }
+			self::support_audit_read_once( $id );
+			$row['id'] = (int) $row['id']; $row['activity_version'] = (int) $row['activity_version'];
+			return rest_ensure_response( array( 'conversation' => $row, 'turns' => array_reverse( $turns ), 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => (int) ceil( $total / $per_page ) ) );
+		}
+		if ( 'PATCH' === $request->get_method() ) {
+			$body = $request->get_json_params(); $status = isset( $body['status'] ) ? sanitize_key( $body['status'] ) : '';
+			$revision = isset( $body['revision'] ) ? absint( $body['revision'] ) : 0;
+			if ( ! in_array( $status, array( 'open', 'resolved' ), true ) || ! $revision ) { return self::error( 'invalid_support_update', 'Choose a status and reload the conversation before saving.', 400 ); }
+			$updated = $wpdb->update( $tables['conversations'], array( 'status' => $status ), array( 'id' => $id, 'activity_version' => $revision ), array( '%s' ), array( '%d', '%d' ) );
+			if ( 1 !== $updated ) { return self::error( $updated ? 'support_store_unavailable' : 'support_revision_conflict', $updated ? 'Conversation status could not be saved.' : 'New conversation activity arrived. Reload before saving.', $updated ? 503 : 409 ); }
+			self::log( 'support.status', 'support_conversation', (string) $id, array( 'status' ), 'success' );
+			return rest_ensure_response( array( 'ok' => true, 'status' => $status, 'revision' => $revision ) );
+		}
+		$wpdb->query( 'START TRANSACTION' );
+		foreach ( array( 'turns', 'notes', 'reads' ) as $key ) {
+			if ( false === $wpdb->delete( $tables[ $key ], array( 'conversation_id' => $id ), array( '%d' ) ) ) { $wpdb->query( 'ROLLBACK' ); return self::error( 'support_delete_failed', 'Conversation could not be deleted.', 503 ); }
+		}
+		$deleted = $wpdb->delete( $tables['conversations'], array( 'id' => $id ), array( '%d' ) );
+		if ( 1 !== $deleted ) { $wpdb->query( 'ROLLBACK' ); return self::error( 'support_delete_failed', 'Conversation could not be deleted.', 503 ); }
+		$wpdb->query( 'COMMIT' );
+		self::log( 'support.delete', 'support_conversation', (string) $id, array(), 'success' );
+		return rest_ensure_response( array( 'ok' => true ) );
+	}
+
+	private static function support_audit_read_once( $id ) {
+		global $wpdb;
+		$tables = self::tables(); $user_id = (int) get_current_user_id();
+		$key = hash( 'sha256', 'support-read:' . $user_id . ':' . (int) $id . ':' . gmdate( 'Y-m-d' ) );
+		$inserted = $wpdb->insert( $tables['receipts'], array( 'receipt_key' => $key, 'user_id' => $user_id, 'action' => 'support.read', 'outcome' => 'success', 'response' => null, 'created_at' => gmdate( 'Y-m-d H:i:s' ) ), array( '%s', '%d', '%s', '%s', '%s', '%s' ) );
+		if ( 1 === $inserted ) { self::log( 'support.read', 'support_conversation', (string) $id, array(), 'success' ); }
+	}
+
+	public static function support_mark_read( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$id = absint( $request['id'] ); $body = $request->get_json_params();
+		$version = isset( $body['readVersion'] ) ? absint( $body['readVersion'] ) : 0;
+		$current = $wpdb->get_var( $wpdb->prepare( "SELECT activity_version FROM {$tables['conversations']} WHERE id = %d AND expires_at > %s", $id, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( null === $current ) { return self::error( 'support_conversation_not_found', 'Support conversation was not found or has expired.', 404 ); }
+		$version = min( $version, (int) $current ); $user_id = (int) get_current_user_id();
+		$wpdb->query( $wpdb->prepare( "INSERT INTO {$tables['reads']} (conversation_id, user_id, read_version, updated_at) VALUES (%d, %d, %d, %s) ON DUPLICATE KEY UPDATE read_version = GREATEST(read_version, VALUES(read_version)), updated_at = VALUES(updated_at)", $id, $user_id, $version, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Read status could not be saved.', 503 ); }
+		if ( $wpdb->rows_affected > 0 ) { self::log( 'support.read', 'support_conversation', (string) $id, array(), 'success' ); }
+		return rest_ensure_response( array( 'ok' => true, 'readVersion' => $version, 'activityVersion' => (int) $current ) );
+	}
+
+	public static function support_notes( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$id = absint( $request['id'] );
+		$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$tables['conversations']} WHERE id = %d AND expires_at > %s", $id, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( ! $exists ) { return self::error( 'support_conversation_not_found', 'Support conversation was not found or has expired.', 404 ); }
+		if ( 'GET' === $request->get_method() ) {
+			list( $page, $per_page ) = self::support_page( $request, 50 );
+			$items = $wpdb->get_results( $wpdb->prepare( "SELECT n.id, n.user_id, u.display_name user_name, n.note_text, n.created_at FROM {$tables['notes']} n LEFT JOIN {$wpdb->users} u ON u.ID = n.user_id WHERE n.conversation_id = %d ORDER BY n.id ASC LIMIT %d OFFSET %d", $id, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
+			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page ) );
+		}
+		$body = $request->get_json_params(); $text = isset( $body['text'] ) && is_string( $body['text'] ) ? trim( $body['text'] ) : '';
+		$key = isset( $body['idempotencyKey'] ) && is_string( $body['idempotencyKey'] ) ? $body['idempotencyKey'] : '';
+		if ( '' === $text || mb_strlen( $text, 'UTF-8' ) > 2000 || ! preg_match( '/^[A-Za-z0-9_-]{16,80}$/', $key ) ) { return self::error( 'invalid_support_note', 'Add a note of up to 2,000 characters and retry.', 400 ); }
+		$key = hash( 'sha256', wp_salt( 'auth' ) . '|' . get_current_user_id() . '|' . $key );
+		$note = Epic_Support_Chat_Store::redact( $text, 2000 );
+		$inserted = $wpdb->insert( $tables['notes'], array( 'conversation_id' => $id, 'user_id' => (int) get_current_user_id(), 'idempotency_key' => $key, 'note_text' => $note, 'created_at' => gmdate( 'Y-m-d H:i:s' ) ), array( '%d', '%d', '%s', '%s', '%s' ) );
+		if ( false === $inserted ) {
+			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, note_text FROM {$tables['notes']} WHERE idempotency_key = %s", $key ), ARRAY_A );
+			if ( $existing && hash_equals( (string) $existing['note_text'], $note ) ) { return rest_ensure_response( array( 'ok' => true, 'id' => (int) $existing['id'], 'duplicate' => true ) ); }
+			return self::error( 'support_note_conflict', 'This note request was already used. Try again.', 409 );
+		}
+		self::log( 'support.note', 'support_conversation', (string) $id, array( 'note' ), 'success' );
+		return rest_ensure_response( array( 'ok' => true, 'id' => (int) $wpdb->insert_id ) );
+	}
+
+	public static function support_summary( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$from = self::support_date( $request->get_param( 'from' ), false ); if ( is_wp_error( $from ) ) { return $from; }
+		$to = self::support_date( $request->get_param( 'to' ), true ); if ( is_wp_error( $to ) ) { return $to; }
+		$where = array( 'c.expires_at > %s' ); $values = array( gmdate( 'Y-m-d H:i:s' ) );
+		if ( $from ) { $where[] = 'c.last_activity_at >= %s'; $values[] = $from; }
+		if ( $to ) { $where[] = 'c.last_activity_at <= %s'; $values[] = $to; }
+		$clause = implode( ' AND ', $where );
+		$conversations = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['conversations']} c WHERE $clause", $values ) );
+		$turn_where = array( 'c.expires_at > %s' ); $turn_values = array( gmdate( 'Y-m-d H:i:s' ) );
+		if ( $from ) { $turn_where[] = 't.started_at >= %s'; $turn_values[] = $from; }
+		if ( $to ) { $turn_where[] = 't.started_at <= %s'; $turn_values[] = $to; }
+		$groups = $wpdb->get_results( $wpdb->prepare( "SELECT t.outcome, COUNT(*) total, AVG(t.duration_ms) avg_duration FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE " . implode( ' AND ', $turn_where ) . ' GROUP BY t.outcome', $turn_values ), ARRAY_A );
+		$counts = array( 'answered' => 0, 'fallback' => 0, 'error' => 0, 'incomplete' => 0 ); $avg = array(); $total = 0;
+		$pending_cutoff = gmdate( 'Y-m-d H:i:s', time() - 120 );
+		$stale_pending = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE t.outcome = 'pending' AND t.started_at <= %s AND " . implode( ' AND ', $turn_where ), array_merge( array( $pending_cutoff ), $turn_values ) ) );
+		foreach ( $groups as $group ) { $outcome = 'pending' === $group['outcome'] ? 'incomplete' : ( isset( $counts[ $group['outcome'] ] ) ? $group['outcome'] : 'error' ); $counts[ $outcome ] += (int) $group['total']; $total += (int) $group['total']; if ( null !== $group['avg_duration'] ) { $avg[] = array( (float) $group['avg_duration'], (int) $group['total'] ); } }
+		$counts['incomplete'] = $stale_pending;
+		$weighted = 0; $duration_count = 0; foreach ( $avg as $row ) { $weighted += $row[0] * $row[1]; $duration_count += $row[1]; }
+		return rest_ensure_response( array( 'conversations' => $conversations, 'turns' => $total, 'outcomes' => $counts, 'averageDurationMs' => $duration_count ? (int) round( $weighted / $duration_count ) : null ) );
+	}
+
+	public static function support_health() {
+		global $wpdb;
+		if ( ! class_exists( 'Epic_Support_Chat_Store' ) ) { return rest_ensure_response( array( 'ready' => false, 'reason' => 'plugin_unavailable', 'dependencyReady' => false ) ); }
+		$dependency_ready = class_exists( 'Epic_Agent_Settings' ) && '' !== (string) Epic_Agent_Settings::get_shared_secret();
+		$tables = Epic_Support_Chat_Store::tables(); $present = array();
+		foreach ( $tables as $table ) { $present[] = (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table; }
+		$last = (string) get_option( 'epic_support_chat_last_purge', '' );
+		$schema_version = (string) get_option( Epic_Support_Chat_Store::DB_VERSION_OPTION, '' );
+		$tables_ready = ! in_array( false, $present, true );
+		$cleanup_scheduled = (bool) wp_next_scheduled( 'epic_support_chat_purge' );
+		$cleanup_overdue = ! $last || strtotime( $last . ' UTC' ) < time() - 2 * HOUR_IN_SECONDS;
+		return rest_ensure_response( array( 'ready' => $dependency_ready && $tables_ready && Epic_Support_Chat_Store::DB_VERSION === $schema_version && $cleanup_scheduled, 'schemaVersion' => $schema_version, 'tablesReady' => $tables_ready, 'dependencyReady' => $dependency_ready, 'cleanupScheduled' => $cleanup_scheduled, 'lastCleanupAt' => $last ?: null, 'cleanupOverdue' => $cleanup_overdue ) );
 	}
 
 	public static function create_grant( $request ) {
@@ -492,14 +698,18 @@ final class Epic_Admin_Dashboard {
 		if ( ! class_exists( 'Epic_VTP_Ajax' ) || ! class_exists( 'Epic_VTP_Order_Meta_Box' ) || ! class_exists( 'Epic_VTP_Client' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
 		$body = $request->get_json_params();
 		$action = isset( $body['action'] ) ? sanitize_key( $body['action'] ) : '';
-		if ( ! in_array( $action, array( 'book', 'cancel', 'label', 'status', 'reconcile' ), true ) ) { return self::error( 'invalid_action', 'Unsupported shipment action.' ); }
+		if ( ! in_array( $action, array( 'book', 'cancel', 'label', 'status', 'reconcile', 'link' ), true ) ) { return self::error( 'invalid_action', 'Unsupported shipment action.' ); }
+		if ( 'link' === $action ) { return self::link_existing_shipment( $order_id, $request, $body ); }
 		if ( 'label' === $action ) {
 			$tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
 			if ( ! $tracking ) { return self::error( 'shipment_missing', 'This order has no shipment label.', 404 ); }
+			$settings = Epic_VTP_Client::get_settings();
+			$label_size = isset( $body['label_size'] ) && '' !== (string) $body['label_size'] ? (string) $body['label_size'] : (string) $settings['label_size'];
+			if ( ! in_array( $label_size, array( '1', '2', '100' ), true ) ) { return self::error( 'invalid_label_size', 'Choose a supported label size (A5, A6 or A7).' ); }
+			$show_postage = isset( $body['show_postage'] ) ? (bool) $body['show_postage'] : ( 'yes' === $settings['label_show_postage'] );
 			$token = Epic_VTP_Client::gen_print_token( array( $tracking ) );
 			if ( is_wp_error( $token ) ) { return $token; }
-			$settings = Epic_VTP_Client::get_settings();
-			return rest_ensure_response( array( 'url' => Epic_VTP_Client::print_url( $token, $settings['label_size'], 'yes' === $settings['label_show_postage'] ) ) );
+			return rest_ensure_response( array( 'url' => Epic_VTP_Client::print_url( $token, $label_size, $show_postage ) ) );
 		}
 		if ( 'status' === $action ) {
 			$status = isset( $body['status'] ) ? sanitize_text_field( $body['status'] ) : '';
@@ -599,13 +809,153 @@ final class Epic_Admin_Dashboard {
 		}
 	}
 
+	/** Attach a verified existing ViettelPost waybill without contacting the courier. */
+	private static function link_existing_shipment( $order_id, $request, $body ) {
+		global $wpdb;
+		$tracking = isset( $body['tracking'] ) && is_string( $body['tracking'] ) ? strtoupper( trim( sanitize_text_field( $body['tracking'] ) ) ) : '';
+		if ( ! preg_match( '/^[A-Z0-9-]{4,50}$/', $tracking ) ) { return self::error( 'tracking_invalid', 'Enter a valid ViettelPost waybill.', 400 ); }
+		if ( ! isset( $body['confirmed_match'] ) || true !== $body['confirmed_match'] ) { return self::error( 'shipment_confirmation_required', 'Confirm that the ViettelPost shipment matches this order.', 400 ); }
+		$status = isset( $body['status'] ) && is_string( $body['status'] ) ? sanitize_text_field( $body['status'] ) : ( isset( $body['status'] ) ? false : '' );
+		if ( false === $status ) { return self::error( 'invalid_status', 'Choose a supported ViettelPost status.' ); }
+		if ( '' !== $status && ! isset( Epic_VTP_Client::status_map()[ $status ] ) ) { return self::error( 'invalid_status', 'Choose a supported ViettelPost status.' ); }
+		$receipt = sanitize_text_field( (string) $request->get_header( 'idempotency-key' ) );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{16,128}$/', $receipt ) ) { return self::error( 'idempotency_required', 'A unique action key is required before linking a shipment.' ); }
+		$user_id = get_current_user_id();
+		$tables = self::tables();
+		$receipt_hash = self::hash( $receipt . ':link:' . $order_id . ':' . $user_id );
+		$request_hash = hash( 'sha256', wp_json_encode( array( 'tracking' => $tracking, 'status' => $status, 'confirmed_match' => true ) ) );
+		$order_lock = 'epic-admin-shipment-' . $order_id;
+		$tracking_lock = 'epic-admin-vtp-' . substr( hash( 'sha256', $tracking ), 0, 40 );
+		$locked = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $order_lock ) );
+		if ( '1' !== (string) $locked ) { return self::error( 'shipment_busy', 'Another shipment action is being processed. Refresh the order and try again.', 409 ); }
+		$tracking_locked = false;
+		try {
+			$locked = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $tracking_lock ) );
+			if ( '1' !== (string) $locked ) { return self::error( 'shipment_busy', 'This waybill is being linked to another order. Refresh and try again.', 409 ); }
+			$tracking_locked = true;
+			$prior = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$tables['receipts']} WHERE receipt_key = %s", $receipt_hash ) );
+			if ( $prior ) {
+				$prior_response = $prior->response ? json_decode( $prior->response, true ) : array();
+				if ( ! isset( $prior_response['request_hash'] ) || ! hash_equals( $prior_response['request_hash'], $request_hash ) ) { return self::error( 'idempotency_conflict', 'This action key was already used with different shipment details.', 409 ); }
+				if ( 'success' === $prior->outcome && $prior->response ) { unset( $prior_response['request_hash'] ); return rest_ensure_response( $prior_response ); }
+				return self::error( 'shipment_link_incomplete', 'This link attempt did not finish. Refresh the order and check its shipment before retrying.', 409 );
+			}
+			$pending = $wpdb->get_results( $wpdb->prepare( "SELECT id, created_at FROM {$tables['receipts']} WHERE action IN (%s, %s) AND outcome = 'pending'", 'shipment-book:' . $order_id, 'shipment-cancel:' . $order_id ) );
+			foreach ( $pending as $row ) {
+				if ( strtotime( $row->created_at . ' UTC' ) > time() - 120 ) { return self::error( 'shipment_busy', 'A courier request is still being processed. Wait briefly, then refresh the order.', 409 ); }
+				$wpdb->update( $tables['receipts'], array( 'outcome' => 'uncertain' ), array( 'id' => (int) $row->id, 'outcome' => 'pending' ), array( '%s' ), array( '%d', '%s' ) );
+			}
+			$unresolved = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$tables['receipts']} WHERE action IN (%s, %s) AND outcome = 'uncertain' ORDER BY id DESC", 'shipment-book:' . $order_id, 'shipment-cancel:' . $order_id ) );
+			if ( count( $unresolved ) > 1 ) { return self::error( 'shipment_reconcile', 'More than one courier action needs reconciliation. Resolve the order in wp-admin before continuing.', 409 ); }
+			if ( $unresolved && 'shipment-book:' . $order_id !== $unresolved[0]->action ) { return self::error( 'shipment_reconcile', 'A previous courier action has an uncertain result. Reconcile it before another action.', 409 ); }
+			$order = wc_get_order( $order_id );
+			if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
+			$current = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+			if ( $current && $current !== $tracking ) { return self::error( 'shipment_exists', 'This order already has a different ViettelPost waybill.', 409 ); }
+			$duplicates = wc_get_orders( array( 'limit' => 2, 'return' => 'ids', 'meta_query' => array( array( 'key' => Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, 'value' => $tracking ) ) ) );
+			foreach ( (array) $duplicates as $duplicate_id ) { if ( (int) $duplicate_id !== (int) $order_id ) { return self::error( 'tracking_conflict', 'This waybill is already linked to another order.', 409 ); } }
+			$response = array( 'ok' => true, 'trackingCode' => $tracking, 'already_linked' => ( $current === $tracking ), 'request_hash' => $request_hash );
+			$inserted = $wpdb->insert( $tables['receipts'], array( 'receipt_key' => $receipt_hash, 'user_id' => $user_id, 'action' => 'shipment-link:' . $order_id, 'outcome' => 'pending', 'created_at' => gmdate( 'Y-m-d H:i:s' ) ), array( '%s', '%d', '%s', '%s', '%s' ) );
+			if ( false === $inserted ) { return self::error( 'shipment_receipt_failed', 'The link could not be reserved safely. Refresh the order and try again.', 503 ); }
+			if ( '' !== $current ) {
+				$response['already_linked'] = true;
+			} else {
+				$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER, $tracking );
+				if ( '' !== $status ) { $order->update_meta_data( Epic_VTP_Order_Meta_Box::META_STATUS, $status ); }
+				$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT, Epic_VTP_Client::is_cod_order( $order ) ? (string) $order->get_total() : '0' );
+				try { $order->save(); } catch ( Throwable $error ) {
+					$wpdb->update( $tables['receipts'], array( 'outcome' => 'failed', 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $receipt_hash ), array( '%s', '%s' ), array( '%s' ) );
+					return self::error( 'shipment_link_save_failed', 'WooCommerce could not save this shipment link. Refresh the order before retrying.', 500 );
+				}
+				$verified = wc_get_order( $order_id );
+				$verified_tracking = $verified ? (string) $verified->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER ) : '';
+				$verified_status = $verified ? (string) $verified->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) : '';
+				$verified_cod = $verified ? (string) $verified->get_meta( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT ) : '';
+				$expected_cod = Epic_VTP_Client::is_cod_order( $order ) ? (string) $order->get_total() : '0';
+				if ( ! $verified || $verified_tracking !== $tracking || ( '' !== $status && $verified_status !== $status ) || $verified_cod !== $expected_cod ) {
+					$wpdb->update( $tables['receipts'], array( 'outcome' => 'failed', 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $receipt_hash ), array( '%s', '%s' ), array( '%s' ) );
+					return self::error( 'shipment_link_verify_failed', 'WooCommerce did not confirm the shipment link. Refresh the order before retrying.', 500 );
+				}
+				$user = get_userdata( $user_id );
+				$actor = $user ? $user->display_name : sprintf( 'user #%d', $user_id );
+				$verified->add_order_note( sprintf( 'Existing ViettelPost waybill %1$s manually linked by %2$s after order and shipment details were verified in ViettelPost.', $tracking, $actor ) );
+			}
+			if ( $unresolved ) {
+				$booking = $unresolved[0];
+				$wpdb->update( $tables['receipts'], array( 'outcome' => 'success', 'response' => wp_json_encode( array( 'ok' => true, 'shipment_exists' => true, 'trackingCode' => $tracking ) ) ), array( 'id' => (int) $booking->id, 'outcome' => 'uncertain' ), array( '%s', '%s' ), array( '%d', '%s' ) );
+			}
+			$wpdb->update( $tables['receipts'], array( 'outcome' => 'success', 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $receipt_hash, 'outcome' => 'pending' ), array( '%s', '%s' ), array( '%s', '%s' ) );
+			if ( empty( $response['already_linked'] ) ) { self::log( 'shipment.link', 'shipments', (string) $order_id, array( '_vtp_order_number', '_vtp_shipment_status', '_vtp_cod_amount' ), 'success' ); }
+			unset( $response['request_hash'] );
+			return rest_ensure_response( $response );
+		} finally {
+			if ( $tracking_locked ) { $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $tracking_lock ) ); }
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $order_lock ) );
+		}
+	}
+
 	public static function audit( $request ) {
 		global $wpdb;
 		$page = max( 1, absint( $request->get_param( 'page' ) ) );
 		$limit = min( 100, max( 1, absint( $request->get_param( 'per_page' ) ) ?: 25 ) );
 		$table = self::tables()['audit'];
-		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table ORDER BY id DESC LIMIT %d OFFSET %d", $limit, ( $page - 1 ) * $limit ), ARRAY_A );
-		return rest_ensure_response( array( 'items' => $rows, 'page' => $page, 'per_page' => $limit, 'total' => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $table" ) ) );
+		$where = array(); $values = array();
+		$from = $request->get_param( 'from' ); $to = $request->get_param( 'to' );
+		if ( null !== $from && '' !== $from ) { $date = self::audit_date_boundary( $from ); if ( is_wp_error( $date ) ) { return $date; } $where[] = 'created_at >= %s'; $values[] = $date; }
+		if ( null !== $to && '' !== $to ) { $date = self::audit_date_boundary( $to, true ); if ( is_wp_error( $date ) ) { return $date; } $where[] = 'created_at < %s'; $values[] = $date; }
+		if ( null !== $from && '' !== $from && null !== $to && '' !== $to && $from > $to ) { return self::error( 'invalid_date_range', 'The start date must not be after the end date.', 400 ); }
+		$user_id = $request->get_param( 'user_id' );
+		if ( null !== $user_id && '' !== $user_id ) { if ( ! ctype_digit( (string) $user_id ) || (int) $user_id < 1 ) { return self::error( 'invalid_user_id', 'Choose a valid user.', 400 ); } $where[] = 'user_id = %d'; $values[] = (int) $user_id; }
+		foreach ( array( 'resource', 'action', 'outcome' ) as $field ) {
+			$value = $request->get_param( $field );
+			if ( null !== $value && '' !== $value ) { if ( ! is_string( $value ) || strlen( $value ) > 100 || sanitize_text_field( $value ) !== $value ) { return self::error( 'invalid_audit_filter', 'The audit filter is invalid.', 400 ); } $where[] = "$field = %s"; $values[] = $value; }
+		}
+		$record_id = $request->get_param( 'record_id' );
+		if ( null !== $record_id && '' !== $record_id ) { if ( ! is_string( $record_id ) || strlen( $record_id ) > 100 || sanitize_text_field( $record_id ) !== $record_id ) { return self::error( 'invalid_record_id', 'The record ID is invalid.', 400 ); } $where[] = 'record_id = %s'; $values[] = $record_id; }
+		$where_sql = $where ? ' WHERE ' . implode( ' AND ', $where ) : '';
+		$count_sql = "SELECT COUNT(*) FROM $table$where_sql";
+		$rows_sql = "SELECT * FROM $table$where_sql ORDER BY id DESC LIMIT %d OFFSET %d";
+		$wpdb->last_error = '';
+		$total = (int) ( $values ? $wpdb->get_var( $wpdb->prepare( $count_sql, $values ) ) : $wpdb->get_var( $count_sql ) );
+		if ( $wpdb->last_error ) { return self::error( 'audit_unavailable', 'Audit history could not be loaded.', 503 ); }
+		$row_values = array_merge( $values, array( $limit, ( $page - 1 ) * $limit ) );
+		$wpdb->last_error = '';
+		$rows = $wpdb->get_results( $wpdb->prepare( $rows_sql, $row_values ), ARRAY_A );
+		if ( $wpdb->last_error || ! is_array( $rows ) ) { return self::error( 'audit_unavailable', 'Audit history could not be loaded.', 503 ); }
+		foreach ( $rows as &$row ) { $user = get_user_by( 'id', (int) $row['user_id'] ); $row['user_name'] = $user ? $user->display_name : 'Người dùng #' . (int) $row['user_id']; }
+		unset( $row );
+		$response = array( 'items' => $rows, 'page' => $page, 'per_page' => $limit, 'total' => $total, 'total_pages' => (int) ceil( $total / $limit ) );
+		if ( '1' === (string) $request->get_param( 'include_filters' ) ) { $filters = self::audit_filter_options( $table ); if ( is_wp_error( $filters ) ) { return $filters; } $response['filters'] = $filters; }
+		return rest_ensure_response( $response );
+	}
+
+	private static function audit_date_boundary( $value, $exclusive_end = false ) {
+		if ( ! is_string( $value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) { return self::error( 'invalid_audit_date', 'Dates must use YYYY-MM-DD format.', 400 ); }
+		$timezone = new DateTimeZone( 'Asia/Ho_Chi_Minh' );
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d', $value, $timezone );
+		$errors = DateTimeImmutable::getLastErrors();
+		if ( ! $date || ( $errors && ( $errors['warning_count'] || $errors['error_count'] ) ) || $date->format( 'Y-m-d' ) !== $value ) { return self::error( 'invalid_audit_date', 'Choose a valid calendar date.', 400 ); }
+		if ( $exclusive_end ) { $date = $date->modify( '+1 day' ); }
+		return $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
+	}
+
+	private static function audit_filter_options( $table ) {
+		global $wpdb;
+		$wpdb->last_error = '';
+		$users = $wpdb->get_col( "SELECT DISTINCT user_id FROM $table ORDER BY user_id ASC" );
+		if ( $wpdb->last_error || ! is_array( $users ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$wpdb->last_error = '';
+		$resources = $wpdb->get_col( "SELECT DISTINCT resource FROM $table ORDER BY resource ASC" );
+		if ( $wpdb->last_error || ! is_array( $resources ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$wpdb->last_error = '';
+		$actions = $wpdb->get_col( "SELECT DISTINCT action FROM $table ORDER BY action ASC" );
+		if ( $wpdb->last_error || ! is_array( $actions ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$wpdb->last_error = '';
+		$outcomes = $wpdb->get_col( "SELECT DISTINCT outcome FROM $table ORDER BY outcome ASC" );
+		if ( $wpdb->last_error || ! is_array( $outcomes ) ) { return self::error( 'audit_unavailable', 'Audit filters could not be loaded.', 503 ); }
+		$user_options = array();
+		foreach ( $users as $id ) { $id = (int) $id; $user = get_user_by( 'id', $id ); $user_options[] = array( 'id' => $id, 'name' => $user ? $user->display_name : 'Người dùng #' . $id ); }
+		return array( 'users' => $user_options, 'resources' => array_values( $resources ), 'actions' => array_values( $actions ), 'outcomes' => array_values( $outcomes ) );
 	}
 
 	public static function finance_export( $request ) {
@@ -873,19 +1223,85 @@ final class Epic_Admin_Dashboard {
 		$body = $request->get_json_params();
 		$token = isset( $body['preview_token'] ) ? (string) $body['preview_token'] : '';
 		if ( ! preg_match( '/^[A-Za-z0-9_-]{40,100}$/', $token ) ) { return self::error( 'preview_required', 'Review the order before saving it.', 400 ); }
+		$preview_hash = self::hash( $token );
+		$reservation = self::find_direct_order_receipt( $request, $preview_hash );
+		if ( is_wp_error( $reservation ) ) { return $reservation; }
+		if ( isset( $reservation['replay'] ) ) { return rest_ensure_response( $reservation['replay'] ); }
 		$stored = get_transient( 'epic_admin_order_draft_' . $token );
 		if ( ! is_array( $stored ) || (int) $stored['user_id'] !== get_current_user_id() || empty( $stored['draft'] ) || ! is_array( $stored['draft'] ) ) { return self::error( 'preview_expired', 'This order preview expired. Review the order again.', 409 ); }
-		delete_transient( 'epic_admin_order_draft_' . $token );
 		$draft = $stored['draft'];
 		$computed = self::compute_direct_order( $draft );
 		if ( is_wp_error( $computed ) ) { return $computed; }
-		$reservation = self::reserve_mutation( $request, 'update' === $draft['action'] ? 'order-direct-update:' . absint( $draft['order_id'] ) : 'order-direct-create' );
+		$reservation = self::reserve_direct_order_receipt( $request, $preview_hash );
 		if ( is_wp_error( $reservation ) ) { return $reservation; }
 		if ( isset( $reservation['replay'] ) ) { return rest_ensure_response( $reservation['replay'] ); }
+		$claimed = self::claim_direct_order_preview( $preview_hash );
+		if ( is_wp_error( $claimed ) ) {
+			self::finish_direct_order_receipt( $reservation['hash'], 'failed', $preview_hash, null );
+			return $claimed;
+		}
+		delete_transient( 'epic_admin_order_draft_' . $token );
 		$result = 'update' === $draft['action'] ? self::update_direct_order_from_draft( $draft, $computed ) : self::create_direct_order_from_draft( $draft, $computed );
-		if ( is_wp_error( $result ) ) { self::finish_mutation( $reservation['hash'], 'failed', null ); return $result; }
-		self::finish_mutation( $reservation['hash'], 'success', $result );
+		if ( is_wp_error( $result ) ) { self::finish_direct_order_receipt( $reservation['hash'], 'failed', $preview_hash, null ); return $result; }
+		self::finish_direct_order_receipt( $reservation['hash'], 'success', $preview_hash, $result );
 		return rest_ensure_response( $result );
+	}
+
+	private static function direct_order_receipt_key( $request ) {
+		$key = sanitize_text_field( (string) $request->get_header( 'idempotency-key' ) );
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{16,128}$/', $key ) ) { return self::error( 'idempotency_required', 'A unique action key is required for this request.' ); }
+		return self::hash( $key . ':order-direct-apply:' . get_current_user_id() );
+	}
+
+	private static function direct_order_receipt_result( $receipt, $preview_hash ) {
+		if ( ! $receipt ) { return null; }
+		$data = $receipt->response ? json_decode( $receipt->response, true ) : array();
+		if ( ! is_array( $data ) || empty( $data['preview_hash'] ) || ! hash_equals( (string) $data['preview_hash'], $preview_hash ) ) {
+			return self::error( 'idempotency_conflict', 'This Idempotency-Key was already used for a different direct-order preview.', 409 );
+		}
+		if ( 'success' === $receipt->outcome && isset( $data['result'] ) && is_array( $data['result'] ) ) { return array( 'hash' => $receipt->receipt_key, 'replay' => $data['result'] ); }
+		return self::error( 'mutation_reconcile', 'This action already ran or has an uncertain outcome. Refresh the order before retrying.', 409 );
+	}
+
+	private static function find_direct_order_receipt( $request, $preview_hash ) {
+		global $wpdb;
+		$key = self::direct_order_receipt_key( $request );
+		if ( is_wp_error( $key ) ) { return $key; }
+		$table = self::tables()['receipts'];
+		$receipt = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE receipt_key = %s", $key ) );
+		return self::direct_order_receipt_result( $receipt, $preview_hash );
+	}
+
+	private static function reserve_direct_order_receipt( $request, $preview_hash ) {
+		global $wpdb;
+		$key = self::direct_order_receipt_key( $request );
+		if ( is_wp_error( $key ) ) { return $key; }
+		$table = self::tables()['receipts'];
+		$response = wp_json_encode( array( 'preview_hash' => $preview_hash, 'result' => null ) );
+		$inserted = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$table} (receipt_key, user_id, action, outcome, response, created_at) VALUES (%s, %d, %s, %s, %s, %s)", $key, get_current_user_id(), 'order-direct-apply', 'pending', $response, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( 1 === (int) $inserted ) { return array( 'hash' => $key ); }
+		$receipt = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE receipt_key = %s", $key ) );
+		$existing = self::direct_order_receipt_result( $receipt, $preview_hash );
+		if ( null !== $existing ) { return $existing; }
+		return self::error( 'mutation_reservation_failed', 'This action could not be safely reserved. No order was created.', 503 );
+	}
+
+	private static function claim_direct_order_preview( $preview_hash ) {
+		global $wpdb;
+		$table = self::tables()['receipts'];
+		$key = self::hash( $preview_hash . ':order-direct-preview:' . get_current_user_id() );
+		$response = wp_json_encode( array( 'preview_hash' => $preview_hash ) );
+		$inserted = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$table} (receipt_key, user_id, action, outcome, response, created_at) VALUES (%s, %d, %s, %s, %s, %s)", $key, get_current_user_id(), 'order-direct-preview', 'success', $response, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( 1 === (int) $inserted ) { return true; }
+		$existing = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$table} WHERE receipt_key = %s", $key ) );
+		if ( $existing ) { return self::error( 'preview_expired', 'This order preview was already used. Review the order again.', 409 ); }
+		return self::error( 'mutation_reservation_failed', 'This order preview could not be reserved safely. No order was created.', 503 );
+	}
+
+	private static function finish_direct_order_receipt( $key, $outcome, $preview_hash, $result ) {
+		global $wpdb;
+		$response = array( 'preview_hash' => $preview_hash, 'result' => $result );
+		$wpdb->update( self::tables()['receipts'], array( 'outcome' => sanitize_key( $outcome ), 'response' => wp_json_encode( $response ) ), array( 'receipt_key' => $key ), array( '%s', '%s' ), array( '%s' ) );
 	}
 
 	private static function normalize_order_draft( $body ) {
@@ -909,6 +1325,7 @@ final class Epic_Admin_Dashboard {
 		$province_name = sanitize_text_field( (string) ( $input['province_name'] ?? $input['city'] ?? '' ) );
 		$province_id = absint( $input['province_id'] ?? 0 );
 		$ward_id = absint( $input['ward_id'] ?? 0 );
+		$ward_name = sanitize_text_field( (string) ( $input['ward_name'] ?? '' ) );
 		$postcode = sanitize_text_field( (string) ( $input['postcode'] ?? '' ) );
 		if ( '' === trim( $first_name . ' ' . $last_name ) ) { return self::error( 'customer_name_required', 'Enter the customer name.' ); }
 		if ( ! preg_match( '/^[0-9+().\-\s]{8,20}$/', $phone ) ) { return self::error( 'customer_phone_required', 'Enter a valid customer phone number.' ); }
@@ -963,7 +1380,7 @@ final class Epic_Admin_Dashboard {
 		if ( strlen( $note ) > 4000 ) { return self::error( 'invalid_note', 'Order notes must be under 4,000 characters.' ); }
 		return array(
 			'action' => $action, 'order_id' => $order_id, 'expected_revision' => $expected_revision,
-			'customer' => array( 'first_name' => $first_name, 'last_name' => $last_name, 'phone' => $phone, 'email' => $email, 'address_1' => $address_1, 'address_2' => $address_2, 'province_id' => $province_id, 'province_name' => $province_name, 'ward_id' => $ward_id, 'postcode' => $postcode ),
+			'customer' => array( 'first_name' => $first_name, 'last_name' => $last_name, 'phone' => $phone, 'email' => $email, 'address_1' => $address_1, 'address_2' => $address_2, 'province_id' => $province_id, 'province_name' => $province_name, 'ward_id' => $ward_id, 'ward_name' => $ward_name, 'postcode' => $postcode ),
 			'fulfillment' => $fulfillment, 'shipping_fee' => $shipping_fee, 'items' => $items, 'coupon_codes' => $coupon_codes,
 			'manual_discount' => $manual_discount, 'fee_lines' => $fee_lines, 'note' => $note,
 		);
@@ -1041,9 +1458,28 @@ final class Epic_Admin_Dashboard {
 
 	private static function fill_direct_order( $order, $draft, $computed ) {
 		$customer = $draft['customer'];
-		$address = array( 'first_name' => $customer['first_name'], 'last_name' => $customer['last_name'], 'address_1' => $customer['address_1'], 'address_2' => $customer['address_2'], 'city' => $customer['province_name'], 'state' => $customer['province_name'], 'postcode' => $customer['postcode'], 'country' => 'VN', 'phone' => $customer['phone'], 'email' => $customer['email'] );
-		$order->set_address( $address, 'billing' );
-		$order->set_address( $address, 'shipping' );
+		$ward_name = isset( $customer['ward_name'] ) ? (string) $customer['ward_name'] : '';
+		$extra = (string) $customer['address_2'];
+		$street = (string) $customer['address_1'];
+		// The structured picker puts the ward in address_2 (the WooCommerce field
+		// staff and the courier plugin read). A separately entered supplementary
+		// address is folded into the street line so nothing is lost.
+		$address_2 = '' !== $ward_name ? $ward_name : $extra;
+		if ( '' !== $ward_name && '' !== $extra ) { $street = rtrim( $street ) . ', ' . $extra; }
+		$address = array(
+			'first_name' => $customer['first_name'], 'last_name' => $customer['last_name'], 'company' => '',
+			'address_1' => $street, 'address_2' => $address_2,
+			'city' => $customer['province_name'], 'state' => $customer['province_name'],
+			'postcode' => $customer['postcode'], 'country' => 'VN',
+			'phone' => $customer['phone'], 'email' => $customer['email'],
+		);
+		// Use the CRUD address setters (HPOS-safe). The legacy set_address()
+		// writes raw postmeta and is the source of the empty-address/empty-order
+		// failure on custom order tables.
+		if ( is_callable( array( $order, 'set_billing_address' ) ) ) { $order->set_billing_address( $address ); }
+		else { $order->set_address( $address, 'billing' ); }
+		if ( is_callable( array( $order, 'set_shipping_address' ) ) ) { $order->set_shipping_address( $address ); }
+		else { $order->set_address( $address, 'shipping' ); }
 		if ( is_callable( array( $order, 'set_shipping_phone' ) ) ) { $order->set_shipping_phone( $customer['phone'] ); }
 		if ( '' !== $customer['email'] && function_exists( 'email_exists' ) ) {
 			$user_id = email_exists( $customer['email'] );
@@ -1095,12 +1531,12 @@ final class Epic_Admin_Dashboard {
 		$order->add_item( $shipping );
 		$order->set_payment_method( 'cod' );
 		$order->set_payment_method_title( 'Thanh toán khi nhận hàng (COD)' );
-		$order->set_paid( false );
 		$order->update_meta_data( self::META_SOURCE, self::SOURCE_DIRECT );
 		$order->update_meta_data( self::META_FULFILLMENT, $draft['fulfillment'] );
 		$order->update_meta_data( self::META_CREATED_BY, get_current_user_id() );
 		if ( $customer['province_id'] ) { $order->update_meta_data( '_epic_vtp_province_id', $customer['province_id'] ); }
 		if ( $customer['ward_id'] ) { $order->update_meta_data( '_epic_ward_id', $customer['ward_id'] ); }
+		if ( '' !== $ward_name ) { $order->update_meta_data( '_epic_ward_name', $ward_name ); }
 		$order->calculate_totals();
 		$order->save();
 		$notes = array( 'Tạo từ EPIC Admin — đơn trực tiếp (điện thoại/Zalo).' );
@@ -1111,15 +1547,47 @@ final class Epic_Admin_Dashboard {
 		return true;
 	}
 
+	private static function direct_order_is_persisted( $order_id ) {
+		$order_id = absint( $order_id );
+		if ( $order_id < 1 || ! function_exists( 'wc_get_order' ) ) { return false; }
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) { return false; }
+		if ( (int) $order->get_item_count( 'line_item' ) < 1 ) { return false; }
+		if ( '' === trim( (string) $order->get_billing_first_name() . ' ' . (string) $order->get_billing_last_name() ) ) { return false; }
+		if ( '' === (string) $order->get_billing_phone() ) { return false; }
+		if ( '' === (string) $order->get_billing_address_1() ) { return false; }
+		return true;
+	}
+
 	private static function create_direct_order_from_draft( $draft, $computed ) {
 		$order = wc_create_order( array( 'created_via' => 'epic-admin' ) );
 		if ( is_wp_error( $order ) ) { return self::error( 'order_create_failed', 'The order could not be created.', 500 ); }
-		$result = self::fill_direct_order( $order, $draft, $computed );
-		if ( is_wp_error( $result ) ) { $order->delete( true ); return $result; }
-		$order->update_status( 'on-hold', 'Tạo đơn trực tiếp (điện thoại/Zalo) từ EPIC Admin.' );
-		if ( function_exists( 'wc_reduce_stock_levels' ) ) { wc_reduce_stock_levels( $order->get_id() ); }
-		self::log( 'order.create', 'orders', (string) $order->get_id(), array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
-		return array( 'ok' => true, 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
+		$order_id = (int) $order->get_id();
+		try {
+			$result = self::fill_direct_order( $order, $draft, $computed );
+			if ( is_wp_error( $result ) ) { $order->delete( true ); return $result; }
+			$order->update_status( 'on-hold', 'Tạo đơn trực tiếp (điện thoại/Zalo) từ EPIC Admin.' );
+		} catch ( \Throwable $e ) {
+			// WC_Order::save() catches Exceptions raised by save hooks; a Throwable
+			// escaping here means the write genuinely failed mid-way.
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d failed: %s', $order_id, $e->getMessage() ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			$order->delete( true );
+			self::log( 'order.create', 'orders', (string) $order_id, array( 'source', 'items', 'customer' ), 'failed' );
+			return self::error( 'order_save_failed', 'Không lưu được đơn hàng. Vui lòng thử lại.', 500 );
+		}
+		// WC_Order::save() can silently swallow an Exception from a save hook and
+		// leave an empty order behind (this was the direct-order "empty order"
+		// bug). Re-read the persisted order and roll it back instead of reporting
+		// a false success.
+		if ( ! self::direct_order_is_persisted( $order_id ) ) {
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d was created but did not persist (no items/address); rolled back.', $order_id ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			$order->delete( true );
+			self::log( 'order.create', 'orders', (string) $order_id, array( 'source', 'items', 'customer' ), 'failed' );
+			return self::error( 'order_save_failed', 'Đơn hàng không lưu được sản phẩm hoặc địa chỉ. Vui lòng kiểm tra Nhật ký WooCommerce (WooCommerce → Trạng thái → Nhật ký) rồi thử lại.', 500 );
+		}
+		if ( function_exists( 'wc_reduce_stock_levels' ) ) { wc_reduce_stock_levels( $order_id ); }
+		self::log( 'order.create', 'orders', (string) $order_id, array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
+		return array( 'ok' => true, 'id' => $order_id, 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
 	}
 
 	private static function update_direct_order_from_draft( $draft, $computed ) {
@@ -1127,10 +1595,20 @@ final class Epic_Admin_Dashboard {
 		if ( ! $order ) { return self::error( 'not_found', 'Order not found.', 404 ); }
 		if ( ! self::is_direct_order( $order ) ) { return self::error( 'not_direct_order', 'Only direct orders can be edited here.', 403 ); }
 		if ( ! hash_equals( self::order_revision( $order ), (string) $draft['expected_revision'] ) ) { return self::error( 'revision_conflict', 'This order changed after you opened it. Reload before saving.', 409 ); }
-		$result = self::fill_direct_order( $order, $draft, $computed );
-		if ( is_wp_error( $result ) ) { return $result; }
-		self::log( 'order.update', 'orders', (string) $order->get_id(), array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
-		return array( 'ok' => true, 'id' => $order->get_id(), 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
+		$order_id = (int) $order->get_id();
+		try {
+			$result = self::fill_direct_order( $order, $draft, $computed );
+			if ( is_wp_error( $result ) ) { return $result; }
+		} catch ( \Throwable $e ) {
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d update failed: %s', $order_id, $e->getMessage() ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			return self::error( 'order_save_failed', 'Không lưu được thay đổi của đơn hàng. Vui lòng thử lại.', 500 );
+		}
+		if ( ! self::direct_order_is_persisted( $order_id ) ) {
+			if ( function_exists( 'wc_get_logger' ) ) { wc_get_logger()->error( sprintf( 'Direct order %d update did not persist.', $order_id ), array( 'source' => 'epic-admin-dashboard' ) ); }
+			return self::error( 'order_save_failed', 'Thay đổi chưa được lưu (thiếu sản phẩm hoặc địa chỉ). Vui lòng kiểm tra Nhật ký WooCommerce rồi thử lại.', 500 );
+		}
+		self::log( 'order.update', 'orders', (string) $order_id, array( 'source', 'fulfillment', 'items', 'shipping', 'coupons', 'manual_discount', 'fees', 'customer' ), 'success' );
+		return array( 'ok' => true, 'id' => $order_id, 'number' => $order->get_order_number(), 'status' => $order->get_status(), 'total' => $order->get_total(), 'currency' => $order->get_currency() );
 	}
 
 	private static function finance_filters( $request ) {
@@ -1355,18 +1833,23 @@ final class Epic_Admin_Dashboard {
 					'total' => $order->get_total(),
 					'currency' => $order->get_currency(),
 					'payment_method' => $order->get_payment_method_title(),
+					'is_cod' => class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::is_cod_order( $order ) : false,
 					'transaction_id' => $order->get_transaction_id(),
 					'paid_at' => $order->get_date_paid() ? $order->get_date_paid()->date( DATE_ATOM ) : null,
 					'billing' => $order->get_address( 'billing' ),
 					'shipping' => $order->get_address( 'shipping' ),
 					'source' => (string) $order->get_meta( self::META_SOURCE ),
 					'fulfillment' => (string) $order->get_meta( self::META_FULFILLMENT ),
+					'province_id' => (int) $order->get_meta( '_epic_vtp_province_id' ),
+					'ward_id' => (int) $order->get_meta( '_epic_ward_id' ),
+					'ward_name' => (string) $order->get_meta( '_epic_ward_name' ),
 					'shipping_fee' => $order->get_shipping_total(),
 					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
 					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
 					'customer_note' => (string) $order->get_customer_note(),
 					'shipment' => self::order_shipment_summary( $order ),
+					'shipment_status_options' => class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::status_map() : array(),
 					'revision' => self::order_revision( $order ),
 				) );
 			}
@@ -1412,6 +1895,7 @@ final class Epic_Admin_Dashboard {
 				'shipment_status' => Epic_VTP_Client::status_label( $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ) ),
 				'shipment_status_code' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS ),
 				'status_options' => Epic_VTP_Client::status_map(),
+				'label_options' => self::shipment_label_options(),
 				'status_date' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_STATUS_DATE ),
 				'expected_delivery' => $order->get_meta( Epic_VTP_Order_Meta_Box::META_EXPECTED ),
 				'last_synced' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_LAST_SYNCED ),
@@ -1420,6 +1904,7 @@ final class Epic_Admin_Dashboard {
 				'cod_amount' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT ),
 				'courier_fee' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_FEE ),
 				'quoted_shipping' => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
+				'cost_breakdown' => self::shipment_cost_breakdown( $order ),
 				'needs_action' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION ),
 				'recipient_name' => $recipient_name,
 				'recipient_phone' => $recipient_phone,
@@ -1601,6 +2086,23 @@ final class Epic_Admin_Dashboard {
 	}
 
 	/**
+	 * Label print choices for the shipment detail dialog. ViettelPost prints a
+	 * digitalized label from the plugin-wide epic_vtp_label_size /
+	 * epic_vtp_label_show_postage options; the dashboard preselects those saved
+	 * defaults while still allowing a per-print override on action=label.
+	 */
+	private static function shipment_label_options() {
+		$settings = class_exists( 'Epic_VTP_Client' ) ? Epic_VTP_Client::get_settings() : array();
+		$default_size = isset( $settings['label_size'] ) ? (string) $settings['label_size'] : '1';
+		if ( ! in_array( $default_size, array( '1', '2', '100' ), true ) ) { $default_size = '1'; }
+		return array(
+			'sizes' => array( '1' => 'A5', '2' => 'A6', '100' => 'A7' ),
+			'default_size' => $default_size,
+			'default_show_postage' => ! isset( $settings['label_show_postage'] ) || 'yes' === $settings['label_show_postage'],
+		);
+	}
+
+	/**
 	 * Compact ViettelPost shipment summary for the order detail sidebar.
 	 * Returns null when the order has no shipment (or the courier plugin is
 	 * absent), so the order screen can degrade gracefully.
@@ -1661,6 +2163,81 @@ final class Epic_Admin_Dashboard {
 			$events[] = array( 'status' => $match[1], 'date' => $date, 'note' => $text );
 		}
 		return array_reverse( $events );
+	}
+
+	/**
+	 * Itemized ViettelPost shipping-cost breakdown for the shipment detail.
+	 *
+	 * Reads `_vtp_cost_breakdown`, written by the courier plugin's webhook on
+	 * every status event. For shipments booked before that meta existed,
+	 * backfills once from ViettelPost's server-side push history (there is no
+	 * order-detail API), caches the result and seeds the journey timeline.
+	 * Read-only and best-effort: returns null on any failure so the detail
+	 * never breaks.
+	 */
+	private static function shipment_cost_breakdown( $order ) {
+		// Literal meta key (not the courier plugin's constant) so an older
+		// epic-viettelpost-shipping that predates the constant can't fatal.
+		$stored = $order->get_meta( '_vtp_cost_breakdown' );
+		if ( is_array( $stored ) && $stored ) {
+			return $stored;
+		}
+		return self::backfill_shipment_from_push_history( $order );
+	}
+
+	/**
+	 * Fetches ViettelPost's push history for the order's waybill and caches the
+	 * cost breakdown (+ journey events) into order meta. Returns the breakdown
+	 * or null. Never throws.
+	 */
+	private static function backfill_shipment_from_push_history( $order ) {
+		$tracking = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
+		if ( '' === $tracking || ! class_exists( 'Epic_VTP_Client' ) || ! method_exists( 'Epic_VTP_Client', 'get_push_history' ) ) {
+			return null;
+		}
+
+		$records = Epic_VTP_Client::get_push_history( $tracking );
+		if ( is_wp_error( $records ) || ! is_array( $records ) ) {
+			return null;
+		}
+
+		$latest = null;
+		$events = array();
+		foreach ( $records as $record ) {
+			$data = ( is_array( $record ) && isset( $record['body']['DATA'] ) && is_array( $record['body']['DATA'] ) ) ? $record['body']['DATA'] : null;
+			if ( ! $data ) {
+				continue;
+			}
+			if ( null === $latest ) {
+				$latest = $data; // Records are newest-first.
+			}
+			$events[] = array(
+				'status' => isset( $data['ORDER_STATUS'] ) ? (string) $data['ORDER_STATUS'] : '',
+				'date'   => isset( $data['ORDER_STATUSDATE'] ) ? sanitize_text_field( (string) $data['ORDER_STATUSDATE'] ) : '',
+				'note'   => isset( $data['NOTE'] ) ? sanitize_text_field( (string) $data['NOTE'] ) : '',
+			);
+		}
+
+		if ( null === $latest || ! method_exists( 'Epic_VTP_Client', 'parse_cost_breakdown' ) ) {
+			return null;
+		}
+
+		$breakdown = Epic_VTP_Client::parse_cost_breakdown( $latest );
+		if ( ! is_array( $breakdown ) || ! $breakdown ) {
+			return null;
+		}
+
+		$order->update_meta_data( '_vtp_cost_breakdown', $breakdown );
+
+		// Seed the structured journey (stored oldest-first) only when absent so
+		// richer webhook-collected history is never clobbered.
+		$existing = $order->get_meta( '_vtp_tracking_history' );
+		if ( ! is_array( $existing ) || ! $existing ) {
+			$order->update_meta_data( '_vtp_tracking_history', array_reverse( $events ) );
+		}
+
+		$order->save();
+		return $breakdown;
 	}
 
 	private static function shipment_reconciliation_state( $order_id ) {
