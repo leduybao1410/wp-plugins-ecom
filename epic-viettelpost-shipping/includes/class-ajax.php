@@ -577,7 +577,10 @@ class Epic_VTP_Ajax {
 			$product = $item->get_product();
 			$unit_price = $item->get_subtotal() / max( 1, $item->get_quantity() );
 			$weight_g   = 0;
-			if ( $product && $product->get_weight() ) {
+			$custom_package_weight_g = absint( $item->get_meta( '_epic_custom_package_size_g', true ) );
+			if ( $custom_package_weight_g > 0 ) {
+				$weight_g = $custom_package_weight_g;
+			} elseif ( $product && $product->get_weight() ) {
 				$unit        = get_option( 'woocommerce_weight_unit', 'kg' );
 				$weight_g    = ( 'g' === $unit ) ? (float) $product->get_weight() : (float) $product->get_weight() * 1000;
 			}

@@ -12,6 +12,7 @@ final class Epic_Admin_Dashboard {
 	const META_FULFILLMENT = '_epic_fulfillment';
 	const META_CREATED_BY = '_epic_created_by';
 	const DIRECT_ORDER_FULFILLMENTS = array( 'courier', 'self' );
+	const DIRECT_CUSTOM_PACKAGE_SIZES = array( 250, 500, 1000 );
 	const DIRECT_ORDER_PREVIEW_TTL = 900;
 
 	public static function init() {
@@ -1239,6 +1240,20 @@ final class Epic_Admin_Dashboard {
 		return self::SOURCE_DIRECT === (string) $order->get_meta( self::META_SOURCE );
 	}
 
+	private static function direct_order_manual_discount( $order ) {
+		foreach ( $order->get_items( 'fee' ) as $fee ) {
+			$stored = (string) $fee->get_meta( '_epic_manual_discount', true );
+			if ( '' !== $stored ) {
+				$discount = json_decode( $stored, true );
+				if ( is_array( $discount ) && isset( $discount['type'], $discount['value'], $discount['reason'] ) ) { return $discount; }
+			}
+			if ( 0 === strpos( (string) $fee->get_name(), 'Giảm giá:' ) && (float) $fee->get_total() < 0 ) {
+				return array( 'type' => 'fixed', 'value' => abs( (float) $fee->get_total() ), 'reason' => trim( substr( (string) $fee->get_name(), strlen( 'Giảm giá:' ) ) ) );
+			}
+		}
+		return null;
+	}
+
 	public static function order_preview( $request ) {
 		if ( ! self::can_manage_direct_orders() ) { return self::error( 'forbidden', 'You cannot create direct orders.', 403 ); }
 		if ( ! class_exists( 'WooCommerce' ) || ! function_exists( 'wc_get_product' ) ) { return self::error( 'woocommerce_unavailable', 'WooCommerce is unavailable.', 503 ); }
@@ -1386,6 +1401,18 @@ final class Epic_Admin_Dashboard {
 		$items = array();
 		foreach ( $raw_items as $raw ) {
 			if ( ! is_array( $raw ) ) { continue; }
+			if ( isset( $raw['kind'] ) && 'custom' === $raw['kind'] ) {
+				$name = sanitize_text_field( (string) ( $raw['name'] ?? '' ) );
+				$package_size_g = absint( $raw['package_size_g'] ?? 0 );
+				$recipe = sanitize_textarea_field( (string) ( $raw['recipe'] ?? '' ) );
+				$quantity = absint( $raw['quantity'] ?? 0 );
+				if ( '' === $name || strlen( $name ) > 120 || ! in_array( $package_size_g, self::DIRECT_CUSTOM_PACKAGE_SIZES, true ) || $quantity < 1 || $quantity > 10000 ) { return self::error( 'invalid_custom_item', 'Each custom line needs a name, supported package size, and quantity between 1 and 10,000.' ); }
+				if ( ! isset( $raw['unit_price'] ) || ! is_numeric( $raw['unit_price'] ) ) { return self::error( 'invalid_price', 'Enter a price for each custom package.' ); }
+				$unit_price = (float) $raw['unit_price'];
+				if ( $unit_price < 0 || $unit_price > 1000000000 || strlen( $recipe ) > 500 ) { return self::error( 'invalid_custom_item', 'Custom package price or blend recipe is out of range.' ); }
+				$items[] = array( 'kind' => 'custom', 'product_id' => 0, 'variation_id' => 0, 'name' => $name, 'package_size_g' => $package_size_g, 'recipe' => $recipe, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => '' );
+				continue;
+			}
 			$product_id = absint( $raw['product_id'] ?? 0 );
 			$variation_id = absint( $raw['variation_id'] ?? 0 );
 			$quantity = absint( $raw['quantity'] ?? 0 );
@@ -1394,7 +1421,7 @@ final class Epic_Admin_Dashboard {
 			if ( null !== $unit_price && ( $unit_price < 0 || $unit_price > 1000000000 ) ) { return self::error( 'invalid_price', 'Line prices must be between 0 and 1,000,000,000.' ); }
 			$reason = isset( $raw['override_reason'] ) ? sanitize_text_field( (string) $raw['override_reason'] ) : '';
 			if ( strlen( $reason ) > 500 ) { return self::error( 'invalid_reason', 'Price override reasons must be under 500 characters.' ); }
-			$items[] = array( 'product_id' => $product_id, 'variation_id' => $variation_id, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => $reason );
+			$items[] = array( 'kind' => 'catalog', 'product_id' => $product_id, 'variation_id' => $variation_id, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => $reason );
 		}
 		if ( ! $items ) { return self::error( 'items_required', 'Add between 1 and 50 products to the order.' ); }
 		$coupon_codes = array();
@@ -1453,6 +1480,12 @@ final class Epic_Admin_Dashboard {
 		$order->set_billing_last_name( $customer['last_name'] );
 		$resolved = array(); $subtotal = 0.0; $warnings = array();
 		foreach ( $draft['items'] as $line ) {
+			if ( 'custom' === $line['kind'] ) {
+				$line_total = $line['unit_price'] * $line['quantity'];
+				$subtotal += $line_total;
+				$resolved[] = array( 'kind' => 'custom', 'product_id' => 0, 'variation_id' => 0, 'name' => $line['name'], 'sku' => '', 'quantity' => $line['quantity'], 'package_size_g' => $line['package_size_g'], 'recipe' => $line['recipe'], 'unit_price' => $line['unit_price'], 'catalog_price' => null, 'line_total' => $line_total, 'override_reason' => '' );
+				continue;
+			}
 			$product = self::resolve_direct_item_product( $line, $warnings );
 			if ( is_wp_error( $product ) ) { return $product; }
 			$catalog = (float) $product->get_price();
@@ -1465,7 +1498,7 @@ final class Epic_Admin_Dashboard {
 			$item->set_subtotal( $line_total );
 			$item->set_total( $line_total );
 			$order->add_item( $item );
-			$resolved[] = array( 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'name' => $product->get_name(), 'sku' => $product->get_sku(), 'quantity' => $line['quantity'], 'unit_price' => $unit_price, 'catalog_price' => $catalog, 'line_total' => $line_total, 'override_reason' => $line['override_reason'] );
+			$resolved[] = array( 'kind' => 'catalog', 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'name' => $product->get_name(), 'sku' => $product->get_sku(), 'quantity' => $line['quantity'], 'unit_price' => $unit_price, 'catalog_price' => $catalog, 'line_total' => $line_total, 'override_reason' => $line['override_reason'] );
 			if ( null !== $line['unit_price'] && abs( $line['unit_price'] - $catalog ) > 0.0001 ) { $warnings[] = sprintf( 'Giá dòng "%s" đã được sửa so với giá niêm yết %s.', $product->get_name(), wp_strip_all_tags( wc_price( $catalog ) ) ); }
 			if ( ! $product->is_in_stock() && ! $product->backorders_allowed() ) { $warnings[] = sprintf( 'Sản phẩm "%s" đang hết hàng.', $product->get_name() ); }
 		}
@@ -1540,6 +1573,7 @@ final class Epic_Admin_Dashboard {
 		foreach ( $order->get_items( array( 'line_item', 'fee', 'shipping', 'coupon' ) ) as $item_id => $item ) { $order->remove_item( $item_id ); }
 		$discard = array();
 		foreach ( $computed['items'] as $line ) {
+			if ( 'custom' === ( $line['kind'] ?? 'catalog' ) ) { continue; }
 			$product = self::resolve_direct_item_product( array( 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'unit_price' => $line['unit_price'] ), $discard );
 			if ( is_wp_error( $product ) ) { return $product; }
 			$item = new WC_Order_Item_Product();
@@ -1550,9 +1584,33 @@ final class Epic_Admin_Dashboard {
 			if ( '' !== $line['override_reason'] ) { $item->add_meta_data( '_epic_price_override_reason', $line['override_reason'] ); }
 			$order->add_item( $item );
 		}
-		foreach ( $draft['coupon_codes'] as $code ) {
-			$applied = $order->apply_coupon( $code );
-			if ( is_wp_error( $applied ) ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s": %s', $code, $applied->get_error_message() ) ); }
+		$exclude_custom_blends = static function ( $items ) {
+			return array_filter( $items, static function ( $entry ) {
+				$item = $entry->object ?? null;
+				return ! ( $item instanceof WC_Order_Item_Product && 'yes' === $item->get_meta( '_epic_custom_blend', true ) );
+			} );
+		};
+		add_filter( 'woocommerce_coupon_get_items_to_apply', $exclude_custom_blends, 10, 1 );
+		try {
+			foreach ( $draft['coupon_codes'] as $code ) {
+				$applied = $order->apply_coupon( $code );
+				if ( is_wp_error( $applied ) ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s": %s', $code, $applied->get_error_message() ) ); }
+			}
+		} finally {
+			remove_filter( 'woocommerce_coupon_get_items_to_apply', $exclude_custom_blends, 10 );
+		}
+		foreach ( $computed['items'] as $line ) {
+			if ( 'custom' !== ( $line['kind'] ?? '' ) ) { continue; }
+			$item = new WC_Order_Item_Product();
+			$item->set_name( $line['name'] );
+			$item->set_quantity( $line['quantity'] );
+			$item->set_subtotal( $line['line_total'] );
+			$item->set_total( $line['line_total'] );
+			$item->add_meta_data( '_epic_custom_blend', 'yes', true );
+			$item->add_meta_data( '_epic_custom_package_size_g', $line['package_size_g'], true );
+			$item->add_meta_data( 'Quy cách gói', 1000 === (int) $line['package_size_g'] ? '1 kg' : $line['package_size_g'] . ' g', true );
+			if ( '' !== $line['recipe'] ) { $item->add_meta_data( 'Tỷ lệ pha', $line['recipe'], true ); }
+			$order->add_item( $item );
 		}
 		if ( $computed['totals']['manual_discount'] > 0 && is_array( $draft['manual_discount'] ) ) {
 			$amount = -1 * (float) $computed['totals']['manual_discount'];
@@ -1560,6 +1618,7 @@ final class Epic_Admin_Dashboard {
 			$fee->set_name( 'Giảm giá: ' . $draft['manual_discount']['reason'] );
 			$fee->set_amount( $amount );
 			$fee->set_total( $amount );
+			$fee->add_meta_data( '_epic_manual_discount', wp_json_encode( $draft['manual_discount'] ), true );
 			$order->add_item( $fee );
 		}
 		foreach ( $draft['fee_lines'] as $line ) {
@@ -1889,7 +1948,9 @@ final class Epic_Admin_Dashboard {
 					'ward_id' => (int) $order->get_meta( '_epic_ward_id' ),
 					'ward_name' => (string) $order->get_meta( '_epic_ward_name' ),
 					'shipping_fee' => $order->get_shipping_total(),
-					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
+					'items' => array_values( array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); $custom = 'yes' === (string) $item->get_meta( '_epic_custom_blend', true ); return array( 'item_id' => $item->get_id(), 'kind' => $custom ? 'custom' : 'catalog', 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'package_size_g' => $custom ? absint( $item->get_meta( '_epic_custom_package_size_g', true ) ) : 0, 'recipe' => $custom ? (string) $item->get_meta( 'Tỷ lệ pha', true ) : '', 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ) ),
+					'fee_lines' => array_values( array_map( static function ( $fee ) { return array( 'name' => $fee->get_name(), 'amount' => (float) $fee->get_total() ); }, array_filter( $order->get_items( 'fee' ), static function ( $fee ) { return '' === (string) $fee->get_meta( '_epic_manual_discount', true ) && 0 !== strpos( (string) $fee->get_name(), 'Giảm giá:' ); } ) ) ),
+					'manual_discount' => self::direct_order_manual_discount( $order ),
 					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
 					'customer_note' => (string) $order->get_customer_note(),
@@ -2079,7 +2140,7 @@ final class Epic_Admin_Dashboard {
 
 	private static function order_revision( $order ) {
 		$items = array();
-		foreach ( $order->get_items() as $item ) { $items[] = array( $item->get_id(), $item->get_name(), $item->get_quantity(), $item->get_total() ); }
+		foreach ( $order->get_items() as $item ) { $items[] = array( $item->get_id(), $item->get_name(), $item->get_quantity(), $item->get_total(), (string) $item->get_meta( '_epic_custom_blend', true ), (int) $item->get_meta( '_epic_custom_package_size_g', true ), (string) $item->get_meta( 'Tỷ lệ pha', true ) ); }
 		$notes = array_map( static function ( $note ) { return isset( $note->id ) ? (int) $note->id : 0; }, wc_get_order_notes( array( 'order_id' => $order->get_id() ) ) );
 		return hash( 'sha256', wp_json_encode( array( $order->get_data(), $items, $notes ) ) );
 	}

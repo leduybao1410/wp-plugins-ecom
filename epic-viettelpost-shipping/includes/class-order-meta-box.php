@@ -291,6 +291,11 @@ class Epic_VTP_Order_Meta_Box {
 
 		foreach ( $order->get_items( 'line_item' ) as $item ) {
 			/** @var WC_Order_Item_Product $item */
+			$custom_package_weight_g = absint( $item->get_meta( '_epic_custom_package_size_g', true ) );
+			if ( $custom_package_weight_g > 0 ) {
+				$total_weight += $custom_package_weight_g * $item->get_quantity();
+				continue;
+			}
 			$product     = $item->get_product();
 			$weight_each = $product && $product->get_weight() ? (float) $product->get_weight() : null;
 
