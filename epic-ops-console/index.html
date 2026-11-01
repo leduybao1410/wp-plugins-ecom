@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>EPIC Vận hành (dev)</title>
+    <script>
+      window.EPIC_OPS = window.EPIC_OPS || {
+        base: "",
+        apiRoot: "https://admin.epicroastery.coffee/wp-json/epic-admin/v1",
+        token: "",
+        logoutUrl: "/wp-login.php?action=logout",
+        user: { id: 1, name: "Dev", email: "" },
+        version: "dev"
+      };
+    </script>
+  </head>
+  <body>
+    <div id="epic-ops-root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
