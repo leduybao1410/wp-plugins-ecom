@@ -341,14 +341,11 @@ class Epic_Mail_MCP_Abilities {
 			return $vars;
 		}
 
-		$settings = Epic_Mail_MCP_Sender::mailer_settings();
-
-		if ( empty( $vars['epic_email'] ) ) {
-			$vars['epic_email'] = $settings['from_email'];
-		}
-
-		if ( empty( $vars['sender_name'] ) ) {
-			$vars['sender_name'] = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
+		$defaults = self::default_vars();
+		foreach ( $defaults as $key => $value ) {
+			if ( ! isset( $vars[ $key ] ) || '' === trim( (string) $vars[ $key ] ) ) {
+				$vars[ $key ] = $value;
+			}
 		}
 
 		$rendered = Epic_Mail_MCP_Templates::render( $slug, $locale, $vars, $override );
@@ -413,6 +410,40 @@ class Epic_Mail_MCP_Abilities {
 			'allowlist' => $rules,
 			'count'     => count( $rules ),
 		);
+	}
+
+	/**
+	 * Default placeholder values.
+	 *
+	 * Contact details come from the EPIC Email Branding plugin when it is
+	 * active, so the mail templates cannot drift from the order emails. The
+	 * phone number is never hardcoded here: a second copy would rot.
+	 *
+	 * @return array
+	 */
+	private static function default_vars() {
+		$settings = Epic_Mail_MCP_Sender::mailer_settings();
+
+		$defaults = array(
+			'sender_name'  => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'sender_title' => '',
+			'epic_email'   => $settings['from_email'],
+			'phone'        => '',
+		);
+
+		if ( class_exists( 'Epic_Email_Branding' ) && method_exists( 'Epic_Email_Branding', 'contact' ) ) {
+			$contact = Epic_Email_Branding::contact();
+
+			if ( ! empty( $contact['brand'] ) ) {
+				$defaults['sender_name'] = (string) $contact['brand'];
+			}
+
+			if ( ! empty( $contact['phone'] ) ) {
+				$defaults['phone'] = (string) $contact['phone'];
+			}
+		}
+
+		return apply_filters( 'epic_mail_mcp_default_vars', $defaults );
 	}
 
 	/**

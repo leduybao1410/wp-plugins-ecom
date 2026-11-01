@@ -58,7 +58,7 @@ Both constants are optional. Without `EPIC_MAIL_MCP_ALLOW`, use the `set-allowli
 * `mail-test` — transport proof. Not content-reviewed.
 * `hospitality-hotel-intro` (`vi`, `en`) — copy of `BD/hospitality-email/hotel-1.vi.html` and `hotel-1.html`, converted to PHP with `{{name}}`, `{{hotel_name}}`, `{{sender_name}}`, `{{sender_title}}`, `{{epic_email}}` and `{{phone}}` placeholders.
 
-`hospitality-hotel-intro` requires `name` and `hotel_name`. `epic_email` defaults to the WP Mail SMTP From address; `sender_name` defaults to the site name.
+`hospitality-hotel-intro` requires `name` and `hotel_name`. `epic_email` defaults to the WP Mail SMTP From address. `sender_name` and `phone` default to the values published by the EPIC Email Branding plugin (`Epic_Email_Branding::contact()`), so the mail templates cannot drift from the order emails. Override them with the `epic_mail_mcp_default_vars` filter.
 
 Regenerate the hospitality templates from the editorial source with:
 
