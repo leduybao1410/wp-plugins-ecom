@@ -4,7 +4,7 @@ Tags: woocommerce, viettelpost, shipping, cod, vietnam
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 0.1.9
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -44,6 +44,18 @@ Log in at viettelpost.vn → Cấu hình tài khoản → Thêm mới token and 
 generated token. Sandbox and production tokens are different.
 
 == Changelog ==
+
+= 0.2.0 =
+* Fix: the status webhook stored ViettelPost's main-freight component
+  (`MONEY_TOTALFEE`) as the order's courier fee, so the order screen, the
+  admin dashboard and the quoted-vs-actual comparison omitted the fuel
+  surcharge and VAT. The stored fee is now the all-in `MONEY_TOTAL`; the
+  components stay in `_vtp_cost_breakdown`.
+* Feature: the order screen shows the itemized courier fee (main freight,
+  fuel surcharge, VAT) under the total.
+* New `Epic_VTP_Client::get_price_detail()` prices one service through
+  `/v2/order/getPriceNlp` and returns the fee components, so staff can see
+  the surcharges before booking.
 
 = 0.1.9 =
 * Feature: the status webhook now stores an itemized shipping-cost breakdown

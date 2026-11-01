@@ -1,4 +1,6 @@
-# EPIC Admin Dashboard API — release 0.2.6
+# EPIC Admin Dashboard API — release 0.2.11
+
+Version 0.2.11 adds `POST /shipping/quote` for the direct-order form: it quotes the configured/cheapest ViettelPost service and returns the itemized fee (`base`, `fuel`, `vat`, `cod_fee`, `other_fee`, `total`, `itemized`) for staff. The shipment detail's `courier_fee` is now the all-in total (preferring the stored cost breakdown's `total`), with `courier_base_fee`, `fuel_surcharge` and `vat` alongside it, so the quoted-vs-actual comparison no longer omits the fuel surcharge and VAT.
 
 Version 0.2.6 adds `POST /shipments/{order_id}/action` with `action: link` for attaching an existing ViettelPost waybill to an unlinked WooCommerce order. It validates waybill uniqueness, records an internal order note and audit event, supports idempotent retries and resolves one uncertain booking receipt without contacting the courier or sending an email. Shipment details can now be fetched directly for an unlinked order ID.
 

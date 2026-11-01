@@ -638,6 +638,111 @@ class Epic_VTP_Client {
 	}
 
 	/**
+	 * Itemized fee for one main service — POST /v2/order/getPriceNlp.
+	 *
+	 * getPriceAll / getPriceAllNlp report a single GIA_CUOC per service, which
+	 * is the all-in total (main freight + fuel surcharge + VAT). This endpoint
+	 * returns those components, so staff can see what makes up the fee without
+	 * deriving the surcharges from percentages ViettelPost changes over time.
+	 *
+	 * @param array  $args         Same shape as get_price_all_nlp().
+	 * @param string $service_code Main service code (MA_DV_CHINH) to price.
+	 * @return array|WP_Error { service, base, fuel, vat, cod_fee, other_fee, total, weight_g }
+	 */
+	public static function get_price_detail( $args, $service_code ) {
+		$service_code = trim( (string) $service_code );
+		if ( '' === $service_code ) {
+			return new WP_Error( 'epic_vtp_no_service', __( 'A ViettelPost service is required to itemize the fee.', 'epic-viettelpost-shipping' ) );
+		}
+
+		$settings = self::get_settings();
+
+		$data = self::request(
+			'/v2/order/getPriceNlp',
+			'POST',
+			array(
+				'SENDER_ADDRESS'    => ! empty( $args['sender_address'] ) ? $args['sender_address'] : self::sender_nlp_address( $settings ),
+				'RECEIVER_ADDRESS'  => (string) $args['receiver_address'],
+				'RECEIVER_PROVINCE' => (int) $args['receiver_province_id'],
+				'PRODUCT_TYPE'      => ! empty( $args['product_type'] ) ? $args['product_type'] : self::PRODUCT_TYPE_GOODS,
+				'PRODUCT_WEIGHT'    => max( (int) $args['weight_g'], 1 ),
+				'PRODUCT_PRICE'     => (int) $args['product_price'],
+				'MONEY_COLLECTION'  => (string) (int) $args['money_collection'],
+				'PRODUCT_LENGTH'    => (int) $args['length_cm'],
+				'PRODUCT_WIDTH'     => (int) $args['width_cm'],
+				'PRODUCT_HEIGHT'    => (int) $args['height_cm'],
+				'ORDER_SERVICE'     => $service_code,
+				'ORDER_SERVICE_ADD' => '',
+				'NATIONAL_TYPE'     => self::PRICE_TYPE_DOMESTIC,
+			)
+		);
+
+		if ( is_wp_error( $data ) ) {
+			return $data;
+		}
+
+		$detail = self::normalize_price_detail( $data, $service_code );
+		if ( null === $detail ) {
+			return new WP_Error( 'epic_vtp_no_price', __( 'ViettelPost returned no itemized price for this route.', 'epic-viettelpost-shipping' ) );
+		}
+
+		return $detail;
+	}
+
+	/**
+	 * Normalizes a /getPrice or /getPriceNlp payload into fee components.
+	 * `total` is ViettelPost's all-in MONEY_TOTAL (main freight + fuel
+	 * surcharge + VAT + COD/other fees). Returns null when no amount is
+	 * present.
+	 *
+	 * @param mixed  $data         Decoded `data` payload.
+	 * @param string $service_code Main service code, echoed back.
+	 * @return array|null
+	 */
+	public static function normalize_price_detail( $data, $service_code = '' ) {
+		if ( ! is_array( $data ) ) {
+			return null;
+		}
+
+		$has_amount = false;
+		foreach ( array( 'MONEY_TOTAL', 'MONEY_TOTAL_FEE', 'MONEY_TOTALFEE', 'MONEY_FEE', 'MONEY_VAT' ) as $key ) {
+			if ( isset( $data[ $key ] ) ) {
+				$has_amount = true;
+				break;
+			}
+		}
+		if ( ! $has_amount ) {
+			return null;
+		}
+
+		$int = static function ( $key ) use ( $data ) {
+			return isset( $data[ $key ] ) ? (int) $data[ $key ] : 0;
+		};
+
+		$base = $int( 'MONEY_TOTAL_FEE' );
+		if ( 0 === $base && isset( $data['MONEY_TOTALFEE'] ) ) {
+			$base = (int) $data['MONEY_TOTALFEE'];
+		}
+		$fuel  = $int( 'MONEY_FEE' );
+		$vat   = $int( 'MONEY_VAT' );
+		$total = $int( 'MONEY_TOTAL' );
+		if ( 0 === $total ) {
+			$total = $base + $fuel + $vat + $int( 'MONEY_COLLECTION_FEE' ) + $int( 'MONEY_OTHER_FEE' ) + $int( 'MONEY_VAS' );
+		}
+
+		return array(
+			'service'   => sanitize_text_field( (string) $service_code ),
+			'base'      => $base,
+			'fuel'      => $fuel,
+			'vat'       => $vat,
+			'cod_fee'   => $int( 'MONEY_COLLECTION_FEE' ),
+			'other_fee' => $int( 'MONEY_OTHER_FEE' ) + $int( 'MONEY_VAS' ),
+			'total'     => $total,
+			'weight_g'  => $int( 'PRODUCT_WEIGHT' ),
+		);
+	}
+
+	/**
 	 * Normalizes a fee response into a flat list of service rows. The
 	 * getPriceAll / getPriceAllNlp endpoints return
 	 * { SENDER_ADDRESS, RECEIVER_ADDRESS, RESULT: [ {MA_DV_CHINH, GIA_CUOC, …} ] },

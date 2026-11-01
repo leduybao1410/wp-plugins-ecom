@@ -130,6 +130,12 @@ class Epic_VTP_Order_Meta_Box {
 		$bucket   = Epic_VTP_Client::bucket_status( $status );
 		$synced   = $order->get_meta( self::META_LAST_SYNCED );
 		$fee      = (string) $order->get_meta( self::META_FEE );
+		// Older shipments stored only the main-freight component in META_FEE;
+		// the breakdown's total is the all-in fee ViettelPost charges.
+		$stored_breakdown = $order->get_meta( self::META_COST_BREAKDOWN );
+		if ( is_array( $stored_breakdown ) && isset( $stored_breakdown['total'] ) && (int) $stored_breakdown['total'] > 0 ) {
+			$fee = (string) (int) $stored_breakdown['total'];
+		}
 		$needs    = (string) $order->get_meta( self::META_NEEDS_ACTION );
 		$quoted   = (float) $order->get_shipping_total() + (float) $order->get_shipping_tax();
 		?>
@@ -173,6 +179,21 @@ class Epic_VTP_Order_Meta_Box {
 				}
 				?>
 			</p>
+			<?php
+			$breakdown = $stored_breakdown;
+			if ( is_array( $breakdown ) ) :
+				$fee_rows = array(
+					__( 'Main freight', 'epic-viettelpost-shipping' ) => isset( $breakdown['main_fee'] ) ? (int) $breakdown['main_fee'] : 0,
+					__( 'Fuel surcharge', 'epic-viettelpost-shipping' ) => isset( $breakdown['fuel_surcharge'] ) ? (int) $breakdown['fuel_surcharge'] : 0,
+					__( 'VAT', 'epic-viettelpost-shipping' ) => isset( $breakdown['vat'] ) ? (int) $breakdown['vat'] : 0,
+				);
+				?>
+				<ul class="epic-vtp-fee-breakdown description" style="margin: 2px 0 0 18px; list-style: disc;">
+					<?php foreach ( $fee_rows as $label => $amount ) : ?>
+						<li><?php echo esc_html( $label ); ?>: <?php echo esc_html( wp_strip_all_tags( wc_price( $amount ) ) ); ?></li>
+					<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
 		<?php endif; ?>
 		<?php if ( $synced ) : ?>
 			<p class="epic-vtp-last-synced"><em>
@@ -295,6 +316,11 @@ class Epic_VTP_Order_Meta_Box {
 
 		foreach ( $order->get_items( 'line_item' ) as $item ) {
 			/** @var WC_Order_Item_Product $item */
+			$custom_package_weight_g = absint( $item->get_meta( '_epic_custom_package_size_g', true ) );
+			if ( $custom_package_weight_g > 0 ) {
+				$total_weight += $custom_package_weight_g * $item->get_quantity();
+				continue;
+			}
 			$product     = $item->get_product();
 			$weight_each = $product && $product->get_weight() ? (float) $product->get_weight() : null;
 

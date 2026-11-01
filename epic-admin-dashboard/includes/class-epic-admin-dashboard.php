@@ -12,6 +12,7 @@ final class Epic_Admin_Dashboard {
 	const META_FULFILLMENT = '_epic_fulfillment';
 	const META_CREATED_BY = '_epic_created_by';
 	const DIRECT_ORDER_FULFILLMENTS = array( 'courier', 'self' );
+	const DIRECT_CUSTOM_PACKAGE_SIZES = array( 250, 500, 1000 );
 	const DIRECT_ORDER_PREVIEW_TTL = 900;
 
 	public static function init() {
@@ -108,8 +109,260 @@ final class Epic_Admin_Dashboard {
 		register_rest_route( self::NS, '/records/(?P<resource>[a-z-]+)/(?P<id>\d+)', array( 'methods' => array( 'GET', 'PATCH', 'DELETE' ), 'callback' => array( __CLASS__, 'record' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/address/provinces', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'address_provinces' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/address/wards', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'address_wards' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/shipping/quote', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'shipping_quote' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/orders/preview', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'order_preview' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
 		register_rest_route( self::NS, '/orders/apply', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'order_apply' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_conversations' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)', array( 'methods' => array( 'GET', 'PATCH', 'DELETE' ), 'callback' => array( __CLASS__, 'support_conversation' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)/read', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'support_mark_read' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/conversations/(?P<id>\d+)/notes', array( 'methods' => array( 'GET', 'POST' ), 'callback' => array( __CLASS__, 'support_notes' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/summary', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_summary' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/export', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_export' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+		register_rest_route( self::NS, '/support/health', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'support_health' ), 'permission_callback' => array( __CLASS__, 'require_admin_session' ) ) );
+	}
+
+	private static function support_tables() {
+		if ( ! class_exists( 'Epic_Support_Chat_Store' ) ) { return self::error( 'support_unavailable', 'Support conversations are unavailable.', 503 ); }
+		return Epic_Support_Chat_Store::tables();
+	}
+
+	private static function support_page( $request, $default = 25 ) {
+		$page = max( 1, min( 100000, absint( $request->get_param( 'page' ) ) ?: 1 ) );
+		$per_page = absint( $request->get_param( 'per_page' ) ) ?: $default;
+		return array( $page, max( 1, min( 100, $per_page ) ) );
+	}
+
+	private static function support_date( $value, $end = false ) {
+		if ( null === $value || '' === $value ) { return null; }
+		if ( ! is_string( $value ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $value ) ) { return self::error( 'invalid_support_date', 'Dates must use YYYY-MM-DD format.', 400 ); }
+		$parts = array_map( 'intval', explode( '-', $value ) );
+		if ( ! checkdate( $parts[1], $parts[2], $parts[0] ) ) { return self::error( 'invalid_support_date', 'Choose a valid calendar date.', 400 ); }
+		$zone = new DateTimeZone( 'Asia/Ho_Chi_Minh' );
+		$date = new DateTimeImmutable( $value . ( $end ? ' 23:59:59.999999' : ' 00:00:00' ), $zone );
+		return $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
+	}
+
+	private static function support_filters( $request, $alias = 'c' ) {
+		$where = array( "$alias.expires_at > %s" );
+		$values = array( gmdate( 'Y-m-d H:i:s' ) );
+		$status = sanitize_key( (string) $request->get_param( 'status' ) );
+		if ( '' !== $status && 'all' !== $status ) {
+			if ( ! in_array( $status, array( 'open', 'resolved' ), true ) ) { return self::error( 'invalid_support_filter', 'Choose a supported conversation status.', 400 ); }
+			$where[] = "$alias.status = %s"; $values[] = $status;
+		}
+		$locale = sanitize_key( (string) $request->get_param( 'locale' ) );
+		if ( '' !== $locale ) {
+			if ( ! in_array( $locale, array( 'vi', 'en', 'ru', 'hi', 'zh', 'ko', 'ja' ), true ) ) { return self::error( 'invalid_support_filter', 'Choose a supported language.', 400 ); }
+			$where[] = "$alias.locale = %s"; $values[] = $locale;
+		}
+		$category = sanitize_key( (string) $request->get_param( 'category' ) );
+		if ( '' !== $category ) {
+			if ( ! in_array( $category, array( 'faq', 'order', 'products', 'fallback', 'budget', 'error', 'pending' ), true ) ) { return self::error( 'invalid_support_filter', 'Choose a supported response category.', 400 ); }
+			$where[] = "EXISTS (SELECT 1 FROM " . Epic_Support_Chat_Store::tables()['turns'] . " sc WHERE sc.conversation_id = $alias.id AND sc.response_kind = %s)"; $values[] = $category;
+		}
+		foreach ( array( 'from' => false, 'to' => true ) as $key => $end ) {
+			$date = self::support_date( $request->get_param( $key ), $end );
+			if ( is_wp_error( $date ) ) { return $date; }
+			if ( null !== $date ) { $where[] = "$alias.last_activity_at " . ( $end ? '<=' : '>=' ) . ' %s'; $values[] = $date; }
+		}
+		$search = $request->get_param( 'search' );
+		if ( null !== $search && '' !== $search ) {
+			if ( ! is_string( $search ) || strlen( $search ) > 100 ) { return self::error( 'invalid_support_search', 'Search text is too long.', 400 ); }
+			$like = '%' . $GLOBALS['wpdb']->esc_like( sanitize_text_field( $search ) ) . '%';
+			$where[] = "EXISTS (SELECT 1 FROM " . Epic_Support_Chat_Store::tables()['turns'] . " sx WHERE sx.conversation_id = $alias.id AND (sx.user_text LIKE %s OR sx.response_text LIKE %s))";
+			$values[] = $like; $values[] = $like;
+		}
+		$unread = $request->get_param( 'unread' );
+		if ( null !== $unread && '' !== $unread ) {
+			if ( ! in_array( (string) $unread, array( 'true', 'false', '1', '0' ), true ) ) { return self::error( 'invalid_support_filter', 'Unread filter is invalid.', 400 ); }
+			$read = "COALESCE((SELECT sr.read_version FROM " . Epic_Support_Chat_Store::tables()['reads'] . " sr WHERE sr.conversation_id = $alias.id AND sr.user_id = " . (int) get_current_user_id() . '), 0)';
+			$where[] = ( in_array( (string) $unread, array( 'true', '1' ), true ) ? "$alias.activity_version > $read" : "$alias.activity_version <= $read" );
+		}
+		return array( 'where' => implode( ' AND ', $where ), 'values' => $values );
+	}
+
+	public static function support_conversations( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$filters = self::support_filters( $request ); if ( is_wp_error( $filters ) ) { return $filters; }
+		list( $page, $per_page ) = self::support_page( $request );
+		$latest = "SELECT t.* FROM {$tables['turns']} t INNER JOIN (SELECT conversation_id, MAX(id) id FROM {$tables['turns']} GROUP BY conversation_id) last_t ON last_t.id = t.id";
+		$sql = "SELECT c.id, c.locale, c.status, c.activity_version, c.created_at, c.last_activity_at, COALESCE(r.read_version, 0) read_version, t.user_text preview, t.response_kind, t.outcome FROM {$tables['conversations']} c LEFT JOIN {$tables['reads']} r ON r.conversation_id = c.id AND r.user_id = %d LEFT JOIN ($latest) t ON t.conversation_id = c.id WHERE {$filters['where']} ORDER BY c.last_activity_at DESC, c.id DESC LIMIT %d OFFSET %d";
+		$params = array_merge( array( (int) get_current_user_id() ), $filters['values'], array( $per_page, ( $page - 1 ) * $per_page ) );
+		$items = $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Support conversations could not be loaded.', 503 ); }
+		$count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['conversations']} c WHERE {$filters['where']}", $filters['values'] ) );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Support conversations could not be counted.', 503 ); }
+		foreach ( $items as &$item ) {
+			$item['id'] = (int) $item['id']; $item['activity_version'] = (int) $item['activity_version']; $item['unread'] = (int) $item['activity_version'] > (int) $item['read_version'];
+			$item['visitor'] = 'Khách #' . $item['id']; unset( $item['read_version'] );
+		}
+		return rest_ensure_response( array( 'items' => $items, 'total' => (int) $count, 'page' => $page, 'per_page' => $per_page, 'total_pages' => (int) ceil( (int) $count / $per_page ) ) );
+	}
+
+	public static function support_conversation( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$id = absint( $request['id'] );
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT id, locale, status, activity_version, created_at, last_activity_at, expires_at FROM {$tables['conversations']} WHERE id = %d AND expires_at > %s", $id, gmdate( 'Y-m-d H:i:s' ) ), ARRAY_A );
+		if ( ! $row ) { return self::error( 'support_conversation_not_found', 'Support conversation was not found or has expired.', 404 ); }
+		if ( 'GET' === $request->get_method() ) {
+			list( $page, $per_page ) = self::support_page( $request, 50 );
+			$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['turns']} WHERE conversation_id = %d", $id ) );
+			$turns = $wpdb->get_results( $wpdb->prepare( "SELECT id, user_text, response_text, response_kind, outcome, cards, started_at, completed_at, duration_ms FROM {$tables['turns']} WHERE conversation_id = %d ORDER BY id DESC LIMIT %d OFFSET %d", $id, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
+			$incomplete_before = gmdate( 'Y-m-d H:i:s', time() - 120 );
+			foreach ( $turns as &$turn ) { $turn['id'] = (int) $turn['id']; $turn['cards'] = $turn['cards'] ? json_decode( $turn['cards'], true ) : null; $turn['incomplete'] = 'pending' === $turn['outcome'] && $turn['started_at'] <= $incomplete_before; if ( null !== $turn['duration_ms'] ) { $turn['duration_ms'] = (int) $turn['duration_ms']; } }
+			self::support_audit_read_once( $id );
+			$row['id'] = (int) $row['id']; $row['activity_version'] = (int) $row['activity_version'];
+			return rest_ensure_response( array( 'conversation' => $row, 'turns' => array_reverse( $turns ), 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => (int) ceil( $total / $per_page ) ) );
+		}
+		if ( 'PATCH' === $request->get_method() ) {
+			$body = $request->get_json_params(); $status = isset( $body['status'] ) ? sanitize_key( $body['status'] ) : '';
+			$revision = isset( $body['revision'] ) ? absint( $body['revision'] ) : 0;
+			if ( ! in_array( $status, array( 'open', 'resolved' ), true ) || ! $revision ) { return self::error( 'invalid_support_update', 'Choose a status and reload the conversation before saving.', 400 ); }
+			$updated = $wpdb->update( $tables['conversations'], array( 'status' => $status ), array( 'id' => $id, 'activity_version' => $revision ), array( '%s' ), array( '%d', '%d' ) );
+			if ( 1 !== $updated ) { return self::error( $updated ? 'support_store_unavailable' : 'support_revision_conflict', $updated ? 'Conversation status could not be saved.' : 'New conversation activity arrived. Reload before saving.', $updated ? 503 : 409 ); }
+			self::log( 'support.status', 'support_conversation', (string) $id, array( 'status' ), 'success' );
+			return rest_ensure_response( array( 'ok' => true, 'status' => $status, 'revision' => $revision ) );
+		}
+		$wpdb->query( 'START TRANSACTION' );
+		foreach ( array( 'turns', 'notes', 'reads' ) as $key ) {
+			if ( false === $wpdb->delete( $tables[ $key ], array( 'conversation_id' => $id ), array( '%d' ) ) ) { $wpdb->query( 'ROLLBACK' ); return self::error( 'support_delete_failed', 'Conversation could not be deleted.', 503 ); }
+		}
+		$deleted = $wpdb->delete( $tables['conversations'], array( 'id' => $id ), array( '%d' ) );
+		if ( 1 !== $deleted ) { $wpdb->query( 'ROLLBACK' ); return self::error( 'support_delete_failed', 'Conversation could not be deleted.', 503 ); }
+		$wpdb->query( 'COMMIT' );
+		self::log( 'support.delete', 'support_conversation', (string) $id, array(), 'success' );
+		return rest_ensure_response( array( 'ok' => true ) );
+	}
+
+	private static function support_audit_read_once( $id ) {
+		global $wpdb;
+		$tables = self::tables(); $user_id = (int) get_current_user_id();
+		$key = hash( 'sha256', 'support-read:' . $user_id . ':' . (int) $id . ':' . gmdate( 'Y-m-d' ) );
+		$inserted = $wpdb->insert( $tables['receipts'], array( 'receipt_key' => $key, 'user_id' => $user_id, 'action' => 'support.read', 'outcome' => 'success', 'response' => null, 'created_at' => gmdate( 'Y-m-d H:i:s' ) ), array( '%s', '%d', '%s', '%s', '%s', '%s' ) );
+		if ( 1 === $inserted ) { self::log( 'support.read', 'support_conversation', (string) $id, array(), 'success' ); }
+	}
+
+	public static function support_mark_read( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$id = absint( $request['id'] ); $body = $request->get_json_params();
+		$version = isset( $body['readVersion'] ) ? absint( $body['readVersion'] ) : 0;
+		$current = $wpdb->get_var( $wpdb->prepare( "SELECT activity_version FROM {$tables['conversations']} WHERE id = %d AND expires_at > %s", $id, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( null === $current ) { return self::error( 'support_conversation_not_found', 'Support conversation was not found or has expired.', 404 ); }
+		$version = min( $version, (int) $current ); $user_id = (int) get_current_user_id();
+		$wpdb->query( $wpdb->prepare( "INSERT INTO {$tables['reads']} (conversation_id, user_id, read_version, updated_at) VALUES (%d, %d, %d, %s) ON DUPLICATE KEY UPDATE read_version = GREATEST(read_version, VALUES(read_version)), updated_at = VALUES(updated_at)", $id, $user_id, $version, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Read status could not be saved.', 503 ); }
+		if ( $wpdb->rows_affected > 0 ) { self::log( 'support.read', 'support_conversation', (string) $id, array(), 'success' ); }
+		return rest_ensure_response( array( 'ok' => true, 'readVersion' => $version, 'activityVersion' => (int) $current ) );
+	}
+
+	public static function support_notes( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$id = absint( $request['id'] );
+		$exists = $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$tables['conversations']} WHERE id = %d AND expires_at > %s", $id, gmdate( 'Y-m-d H:i:s' ) ) );
+		if ( ! $exists ) { return self::error( 'support_conversation_not_found', 'Support conversation was not found or has expired.', 404 ); }
+		if ( 'GET' === $request->get_method() ) {
+			list( $page, $per_page ) = self::support_page( $request, 50 );
+			$items = $wpdb->get_results( $wpdb->prepare( "SELECT n.id, n.user_id, u.display_name user_name, n.note_text, n.created_at FROM {$tables['notes']} n LEFT JOIN {$wpdb->users} u ON u.ID = n.user_id WHERE n.conversation_id = %d ORDER BY n.id ASC LIMIT %d OFFSET %d", $id, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
+			return rest_ensure_response( array( 'items' => $items, 'page' => $page, 'per_page' => $per_page ) );
+		}
+		$body = $request->get_json_params(); $text = isset( $body['text'] ) && is_string( $body['text'] ) ? trim( $body['text'] ) : '';
+		$key = isset( $body['idempotencyKey'] ) && is_string( $body['idempotencyKey'] ) ? $body['idempotencyKey'] : '';
+		if ( '' === $text || mb_strlen( $text, 'UTF-8' ) > 2000 || ! preg_match( '/^[A-Za-z0-9_-]{16,80}$/', $key ) ) { return self::error( 'invalid_support_note', 'Add a note of up to 2,000 characters and retry.', 400 ); }
+		$key = hash( 'sha256', wp_salt( 'auth' ) . '|' . get_current_user_id() . '|' . $key );
+		$note = Epic_Support_Chat_Store::redact( $text, 2000 );
+		$inserted = $wpdb->insert( $tables['notes'], array( 'conversation_id' => $id, 'user_id' => (int) get_current_user_id(), 'idempotency_key' => $key, 'note_text' => $note, 'created_at' => gmdate( 'Y-m-d H:i:s' ) ), array( '%d', '%d', '%s', '%s', '%s' ) );
+		if ( false === $inserted ) {
+			$existing = $wpdb->get_row( $wpdb->prepare( "SELECT id, note_text FROM {$tables['notes']} WHERE idempotency_key = %s", $key ), ARRAY_A );
+			if ( $existing && hash_equals( (string) $existing['note_text'], $note ) ) { return rest_ensure_response( array( 'ok' => true, 'id' => (int) $existing['id'], 'duplicate' => true ) ); }
+			return self::error( 'support_note_conflict', 'This note request was already used. Try again.', 409 );
+		}
+		self::log( 'support.note', 'support_conversation', (string) $id, array( 'note' ), 'success' );
+		return rest_ensure_response( array( 'ok' => true, 'id' => (int) $wpdb->insert_id ) );
+	}
+
+	public static function support_summary( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$from = self::support_date( $request->get_param( 'from' ), false ); if ( is_wp_error( $from ) ) { return $from; }
+		$to = self::support_date( $request->get_param( 'to' ), true ); if ( is_wp_error( $to ) ) { return $to; }
+		$where = array( 'c.expires_at > %s' ); $values = array( gmdate( 'Y-m-d H:i:s' ) );
+		if ( $from ) { $where[] = 'c.last_activity_at >= %s'; $values[] = $from; }
+		if ( $to ) { $where[] = 'c.last_activity_at <= %s'; $values[] = $to; }
+		$clause = implode( ' AND ', $where );
+		$conversations = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['conversations']} c WHERE $clause", $values ) );
+		$turn_where = array( 'c.expires_at > %s' ); $turn_values = array( gmdate( 'Y-m-d H:i:s' ) );
+		if ( $from ) { $turn_where[] = 't.started_at >= %s'; $turn_values[] = $from; }
+		if ( $to ) { $turn_where[] = 't.started_at <= %s'; $turn_values[] = $to; }
+		$groups = $wpdb->get_results( $wpdb->prepare( "SELECT t.outcome, COUNT(*) total, AVG(t.duration_ms) avg_duration FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE " . implode( ' AND ', $turn_where ) . ' GROUP BY t.outcome', $turn_values ), ARRAY_A );
+		$counts = array( 'answered' => 0, 'fallback' => 0, 'error' => 0, 'incomplete' => 0 ); $avg = array(); $total = 0;
+		$pending_cutoff = gmdate( 'Y-m-d H:i:s', time() - 120 );
+		$stale_pending = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE t.outcome = 'pending' AND t.started_at <= %s AND " . implode( ' AND ', $turn_where ), array_merge( array( $pending_cutoff ), $turn_values ) ) );
+		foreach ( $groups as $group ) { $outcome = 'pending' === $group['outcome'] ? 'incomplete' : ( isset( $counts[ $group['outcome'] ] ) ? $group['outcome'] : 'error' ); $counts[ $outcome ] += (int) $group['total']; $total += (int) $group['total']; if ( null !== $group['avg_duration'] ) { $avg[] = array( (float) $group['avg_duration'], (int) $group['total'] ); } }
+		$counts['incomplete'] = $stale_pending;
+		$weighted = 0; $duration_count = 0; foreach ( $avg as $row ) { $weighted += $row[0] * $row[1]; $duration_count += $row[1]; }
+		return rest_ensure_response( array( 'conversations' => $conversations, 'turns' => $total, 'outcomes' => $counts, 'averageDurationMs' => $duration_count ? (int) round( $weighted / $duration_count ) : null ) );
+	}
+
+	public static function support_health() {
+		global $wpdb;
+		if ( ! class_exists( 'Epic_Support_Chat_Store' ) ) { return rest_ensure_response( array( 'ready' => false, 'reason' => 'plugin_unavailable', 'dependencyReady' => false ) ); }
+		$dependency_ready = class_exists( 'Epic_Agent_Settings' ) && '' !== (string) Epic_Agent_Settings::get_shared_secret();
+		$tables = Epic_Support_Chat_Store::tables(); $present = array();
+		foreach ( $tables as $table ) { $present[] = (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) === $table; }
+		$last = (string) get_option( 'epic_support_chat_last_purge', '' );
+		$schema_version = (string) get_option( Epic_Support_Chat_Store::DB_VERSION_OPTION, '' );
+		$tables_ready = ! in_array( false, $present, true );
+		$cleanup_scheduled = (bool) wp_next_scheduled( 'epic_support_chat_purge' );
+		$cleanup_overdue = ! $last || strtotime( $last . ' UTC' ) < time() - 2 * HOUR_IN_SECONDS;
+		return rest_ensure_response( array( 'ready' => $dependency_ready && $tables_ready && Epic_Support_Chat_Store::DB_VERSION === $schema_version && $cleanup_scheduled, 'schemaVersion' => $schema_version, 'tablesReady' => $tables_ready, 'dependencyReady' => $dependency_ready, 'cleanupScheduled' => $cleanup_scheduled, 'lastCleanupAt' => $last ?: null, 'cleanupOverdue' => $cleanup_overdue ) );
+	}
+
+	/** Download a redacted archive or review-ready JSONL training candidate file. */
+	public static function support_export( $request ) {
+		global $wpdb;
+		$tables = self::support_tables(); if ( is_wp_error( $tables ) ) { return $tables; }
+		$format = sanitize_key( (string) $request->get_param( 'format' ) );
+		if ( ! in_array( $format, array( 'backup', 'training' ), true ) ) { return self::error( 'invalid_support_export_format', 'Choose backup or training export format.', 400 ); }
+		$from = self::support_date( $request->get_param( 'from' ), false ); if ( is_wp_error( $from ) ) { return $from; }
+		$to = self::support_date( $request->get_param( 'to' ), true ); if ( is_wp_error( $to ) ) { return $to; }
+		$where = array( 'c.expires_at > %s' ); $values = array( gmdate( 'Y-m-d H:i:s' ) );
+		if ( $from ) { $where[] = 't.started_at >= %s'; $values[] = $from; }
+		if ( $to ) { $where[] = 't.started_at <= %s'; $values[] = $to; }
+		if ( 'training' === $format ) { $where[] = "t.outcome = 'answered'"; $where[] = "t.response_kind IN ('faq', 'products')"; }
+		$clause = implode( ' AND ', $where );
+		$count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE $clause", $values ) );
+		if ( $count > 2000 ) { return self::error( 'support_export_too_large', 'Narrow the date range to export at most 2,000 turns at a time.', 413 ); }
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT c.id conversation_id, c.locale, c.status, c.created_at conversation_created_at, c.last_activity_at, c.expires_at, t.id turn_id, t.user_text, t.response_text, t.response_kind, t.outcome, t.cards, t.started_at, t.completed_at, t.duration_ms FROM {$tables['turns']} t INNER JOIN {$tables['conversations']} c ON c.id = t.conversation_id WHERE $clause ORDER BY c.id ASC, t.id ASC LIMIT 2000", $values ), ARRAY_A );
+		if ( $wpdb->last_error ) { return self::error( 'support_store_unavailable', 'Support archive could not be exported.', 503 ); }
+		if ( 'training' === $format ) {
+			$lines = array();
+			foreach ( $rows as $row ) {
+				$lines[] = wp_json_encode( array(
+					'messages' => array( array( 'role' => 'user', 'content' => Epic_Support_Chat_Store::redact( $row['user_text'], 4000 ) ), array( 'role' => 'assistant', 'content' => Epic_Support_Chat_Store::redact( (string) $row['response_text'], 4000 ) ) ),
+					'locale' => sanitize_key( $row['locale'] ), 'category' => sanitize_key( $row['response_kind'] ),
+					'source' => array( 'conversation_id' => (int) $row['conversation_id'], 'turn_id' => (int) $row['turn_id'], 'started_at' => $row['started_at'] ),
+				), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			}
+			$content = empty( $lines ) ? '' : implode( "\n", $lines ) . "\n";
+			$filename = 'epic-support-training-' . gmdate( 'Y-m-d' ) . '.jsonl';
+		} else {
+			$conversations = array();
+			foreach ( $rows as $row ) {
+				$id = (int) $row['conversation_id'];
+				if ( ! isset( $conversations[ $id ] ) ) {
+					$conversations[ $id ] = array( 'id' => $id, 'visitor' => 'Khách #' . $id, 'locale' => sanitize_key( $row['locale'] ), 'status' => sanitize_key( $row['status'] ), 'created_at' => $row['conversation_created_at'], 'last_activity_at' => $row['last_activity_at'], 'expires_at' => $row['expires_at'], 'turns' => array() );
+				}
+				$conversations[ $id ]['turns'][] = array( 'id' => (int) $row['turn_id'], 'user_text' => Epic_Support_Chat_Store::redact( $row['user_text'], 4000 ), 'response_text' => Epic_Support_Chat_Store::redact( (string) $row['response_text'], 4000 ), 'response_kind' => sanitize_key( $row['response_kind'] ), 'outcome' => sanitize_key( $row['outcome'] ), 'cards' => $row['cards'] ? Epic_Support_Chat_Store::normalize_cards( json_decode( $row['cards'], true ) ) : null, 'started_at' => $row['started_at'], 'completed_at' => $row['completed_at'], 'duration_ms' => null === $row['duration_ms'] ? null : (int) $row['duration_ms'] );
+			}
+			$content = wp_json_encode( array( 'format' => 'epic-support-backup-v1', 'exported_at' => gmdate( 'Y-m-d H:i:s' ), 'retention_days' => Epic_Support_Chat_Store::RETENTION_DAYS, 'conversations' => array_values( $conversations ) ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+			$filename = 'epic-support-backup-' . gmdate( 'Y-m-d' ) . '.json';
+		}
+		self::log( 'support.export', 'support_export', $format, array( 'format', 'rows:' . count( $rows ) ), 'success' );
+		return rest_ensure_response( array( 'filename' => $filename, 'content_type' => 'training' === $format ? 'application/x-ndjson' : 'application/json', 'data_base64' => base64_encode( (string) $content ), 'rows' => count( $rows ) ) );
 	}
 
 	public static function create_grant( $request ) {
@@ -984,8 +1237,146 @@ final class Epic_Admin_Dashboard {
 		return current_user_can( 'edit_shop_orders' ) || current_user_can( 'manage_woocommerce' );
 	}
 
+	/**
+	 * Estimates the ViettelPost fee for a direct-order draft. Returns the
+	 * all-in total (main freight + fuel surcharge + VAT) plus the itemized
+	 * components for staff; the storefront shows only the total. Cached for
+	 * five minutes per route/parcel shape so typing in the order form does not
+	 * hammer ViettelPost.
+	 */
+	public static function shipping_quote( $request ) {
+		if ( ! class_exists( 'Epic_VTP_Client' ) ) { return self::error( 'shipping_unavailable', 'ViettelPost shipping plugin is unavailable.', 503 ); }
+		if ( ! function_exists( 'wc_get_product' ) ) { return self::error( 'woocommerce_unavailable', 'WooCommerce is unavailable.', 503 ); }
+		if ( ! self::can_manage_direct_orders() ) { return self::error( 'forbidden', 'You cannot estimate shipping fees.', 403 ); }
+
+		$body     = $request->get_json_params();
+		$body     = is_array( $body ) ? $body : array();
+		$customer = isset( $body['customer'] ) && is_array( $body['customer'] ) ? $body['customer'] : array();
+		$province_id = isset( $customer['province_id'] ) ? absint( $customer['province_id'] ) : 0;
+		if ( $province_id < 1 ) { return self::error( 'province_required', 'Choose a province before estimating the shipping fee.' ); }
+
+		$address = self::shipping_quote_address( $customer );
+		if ( '' === $address ) { return self::error( 'address_required', 'Enter a delivery address before estimating the shipping fee.' ); }
+
+		$parcel = self::shipping_quote_parcel( isset( $body['items'] ) && is_array( $body['items'] ) ? $body['items'] : array() );
+		if ( is_wp_error( $parcel ) ) { return $parcel; }
+
+		$settings = Epic_VTP_Client::get_settings();
+		$args = array(
+			'sender_address'       => '',
+			'receiver_address'     => $address,
+			'receiver_province_id' => $province_id,
+			'weight_g'             => $parcel['weight_g'],
+			'product_price'        => $parcel['product_price'],
+			'money_collection'     => isset( $body['money_collection'] ) ? max( 0, (int) $body['money_collection'] ) : $parcel['product_price'],
+			'length_cm'            => isset( $settings['default_length_cm'] ) ? (int) $settings['default_length_cm'] : 20,
+			'width_cm'             => isset( $settings['default_width_cm'] ) ? (int) $settings['default_width_cm'] : 15,
+			'height_cm'            => isset( $settings['default_height_cm'] ) ? (int) $settings['default_height_cm'] : 10,
+		);
+
+		$cache_key = 'epic_admin_shipping_quote_' . md5( wp_json_encode( $args ) );
+		$cached    = get_transient( $cache_key );
+		if ( is_array( $cached ) ) { return rest_ensure_response( $cached ); }
+
+		$services = Epic_VTP_Client::get_price_all_nlp( $args );
+		if ( is_wp_error( $services ) ) { return self::error( 'shipping_quote_failed', $services->get_error_message(), 503 ); }
+
+		$service = Epic_VTP_Client::choose_service( $services );
+		if ( is_wp_error( $service ) ) { return self::error( 'shipping_quote_failed', $service->get_error_message(), 503 ); }
+
+		$options = array();
+		$total   = 0;
+		$name    = '';
+		foreach ( (array) $services as $row ) {
+			if ( ! is_array( $row ) || empty( $row['MA_DV_CHINH'] ) || ! isset( $row['GIA_CUOC'] ) ) { continue; }
+			$row_name = isset( $row['TEN_DICHVU'] ) ? (string) $row['TEN_DICHVU'] : '';
+			$options[] = array( 'code' => (string) $row['MA_DV_CHINH'], 'name' => $row_name, 'total' => (int) $row['GIA_CUOC'] );
+			if ( (string) $row['MA_DV_CHINH'] === (string) $service ) { $total = (int) $row['GIA_CUOC']; $name = $row_name; }
+		}
+
+		$detail = Epic_VTP_Client::get_price_detail( $args, $service );
+		$payload = array(
+			'service'          => (string) $service,
+			'service_name'     => $name,
+			'weight_g'         => $parcel['weight_g'],
+			'product_price'    => $parcel['product_price'],
+			'money_collection' => $args['money_collection'],
+			'itemized'         => ! is_wp_error( $detail ),
+			'base'             => 0,
+			'fuel'             => 0,
+			'vat'              => 0,
+			'cod_fee'          => 0,
+			'other_fee'        => 0,
+			'total'            => $total,
+			'services'         => $options,
+		);
+		if ( ! is_wp_error( $detail ) ) {
+			foreach ( array( 'base', 'fuel', 'vat', 'cod_fee', 'other_fee', 'total' ) as $key ) {
+				$payload[ $key ] = (int) $detail[ $key ];
+			}
+		}
+
+		set_transient( $cache_key, $payload, 5 * MINUTE_IN_SECONDS );
+		return rest_ensure_response( $payload );
+	}
+
+	private static function shipping_quote_address( array $customer ) {
+		$parts = array();
+		foreach ( array( 'address_1', 'address_2', 'ward_name', 'province_name' ) as $key ) {
+			$value = isset( $customer[ $key ] ) ? sanitize_text_field( (string) $customer[ $key ] ) : '';
+			if ( '' !== $value && ! in_array( $value, $parts, true ) ) { $parts[] = $value; }
+		}
+		return implode( ', ', $parts );
+	}
+
+	/**
+	 * Parcel weight (grams) and declared goods value for a direct-order draft.
+	 * Custom blend rows carry their package grams; catalog rows use the
+	 * WooCommerce product/variation weight, matching the booking path.
+	 */
+	private static function shipping_quote_parcel( array $items ) {
+		$weight_g      = 0;
+		$product_price = 0.0;
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) { continue; }
+			$quantity = max( 1, (int) ( isset( $item['quantity'] ) ? $item['quantity'] : 1 ) );
+			$price    = isset( $item['unit_price'] ) && null !== $item['unit_price'] && '' !== $item['unit_price'] ? (float) $item['unit_price'] : 0.0;
+			if ( 'custom' === ( isset( $item['kind'] ) ? (string) $item['kind'] : '' ) ) {
+				$weight_g      += absint( isset( $item['package_size_g'] ) ? $item['package_size_g'] : 0 ) * $quantity;
+				$product_price += $price * $quantity;
+				continue;
+			}
+			$variation_id = isset( $item['variation_id'] ) ? absint( $item['variation_id'] ) : 0;
+			$product_id   = isset( $item['product_id'] ) ? absint( $item['product_id'] ) : 0;
+			$product      = $variation_id ? wc_get_product( $variation_id ) : ( $product_id ? wc_get_product( $product_id ) : null );
+			if ( ! $product ) { continue; }
+			$unit   = get_option( 'woocommerce_weight_unit', 'kg' );
+			$each   = (float) $product->get_weight();
+			$each_g = ( 'g' === $unit ) ? $each : $each * 1000;
+			$weight_g += (int) round( $each_g ) * $quantity;
+			if ( $price <= 0 ) { $price = (float) $product->get_price(); }
+			$product_price += $price * $quantity;
+		}
+		if ( $weight_g < 1 ) { return self::error( 'weight_required', 'Add products with a weight before estimating the shipping fee.' ); }
+		return array( 'weight_g' => $weight_g, 'product_price' => (int) round( $product_price ) );
+	}
+
 	private static function is_direct_order( $order ) {
 		return self::SOURCE_DIRECT === (string) $order->get_meta( self::META_SOURCE );
+	}
+
+	private static function direct_order_manual_discount( $order ) {
+		foreach ( $order->get_items( 'fee' ) as $fee ) {
+			$stored = (string) $fee->get_meta( '_epic_manual_discount', true );
+			if ( '' !== $stored ) {
+				$discount = json_decode( $stored, true );
+				if ( is_array( $discount ) && isset( $discount['type'], $discount['value'], $discount['reason'] ) ) { return $discount; }
+			}
+			if ( 0 === strpos( (string) $fee->get_name(), 'Giảm giá:' ) && (float) $fee->get_total() < 0 ) {
+				return array( 'type' => 'fixed', 'value' => abs( (float) $fee->get_total() ), 'reason' => trim( substr( (string) $fee->get_name(), strlen( 'Giảm giá:' ) ) ) );
+			}
+		}
+		return null;
 	}
 
 	public static function order_preview( $request ) {
@@ -1135,6 +1526,18 @@ final class Epic_Admin_Dashboard {
 		$items = array();
 		foreach ( $raw_items as $raw ) {
 			if ( ! is_array( $raw ) ) { continue; }
+			if ( isset( $raw['kind'] ) && 'custom' === $raw['kind'] ) {
+				$name = sanitize_text_field( (string) ( $raw['name'] ?? '' ) );
+				$package_size_g = absint( $raw['package_size_g'] ?? 0 );
+				$recipe = sanitize_textarea_field( (string) ( $raw['recipe'] ?? '' ) );
+				$quantity = absint( $raw['quantity'] ?? 0 );
+				if ( '' === $name || strlen( $name ) > 120 || ! in_array( $package_size_g, self::DIRECT_CUSTOM_PACKAGE_SIZES, true ) || $quantity < 1 || $quantity > 10000 ) { return self::error( 'invalid_custom_item', 'Each custom line needs a name, supported package size, and quantity between 1 and 10,000.' ); }
+				if ( ! isset( $raw['unit_price'] ) || ! is_numeric( $raw['unit_price'] ) ) { return self::error( 'invalid_price', 'Enter a price for each custom package.' ); }
+				$unit_price = (float) $raw['unit_price'];
+				if ( $unit_price < 0 || $unit_price > 1000000000 || strlen( $recipe ) > 500 ) { return self::error( 'invalid_custom_item', 'Custom package price or blend recipe is out of range.' ); }
+				$items[] = array( 'kind' => 'custom', 'product_id' => 0, 'variation_id' => 0, 'name' => $name, 'package_size_g' => $package_size_g, 'recipe' => $recipe, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => '' );
+				continue;
+			}
 			$product_id = absint( $raw['product_id'] ?? 0 );
 			$variation_id = absint( $raw['variation_id'] ?? 0 );
 			$quantity = absint( $raw['quantity'] ?? 0 );
@@ -1143,7 +1546,7 @@ final class Epic_Admin_Dashboard {
 			if ( null !== $unit_price && ( $unit_price < 0 || $unit_price > 1000000000 ) ) { return self::error( 'invalid_price', 'Line prices must be between 0 and 1,000,000,000.' ); }
 			$reason = isset( $raw['override_reason'] ) ? sanitize_text_field( (string) $raw['override_reason'] ) : '';
 			if ( strlen( $reason ) > 500 ) { return self::error( 'invalid_reason', 'Price override reasons must be under 500 characters.' ); }
-			$items[] = array( 'product_id' => $product_id, 'variation_id' => $variation_id, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => $reason );
+			$items[] = array( 'kind' => 'catalog', 'product_id' => $product_id, 'variation_id' => $variation_id, 'quantity' => $quantity, 'unit_price' => $unit_price, 'override_reason' => $reason );
 		}
 		if ( ! $items ) { return self::error( 'items_required', 'Add between 1 and 50 products to the order.' ); }
 		$coupon_codes = array();
@@ -1202,6 +1605,12 @@ final class Epic_Admin_Dashboard {
 		$order->set_billing_last_name( $customer['last_name'] );
 		$resolved = array(); $subtotal = 0.0; $warnings = array();
 		foreach ( $draft['items'] as $line ) {
+			if ( 'custom' === $line['kind'] ) {
+				$line_total = $line['unit_price'] * $line['quantity'];
+				$subtotal += $line_total;
+				$resolved[] = array( 'kind' => 'custom', 'product_id' => 0, 'variation_id' => 0, 'name' => $line['name'], 'sku' => '', 'quantity' => $line['quantity'], 'package_size_g' => $line['package_size_g'], 'recipe' => $line['recipe'], 'unit_price' => $line['unit_price'], 'catalog_price' => null, 'line_total' => $line_total, 'override_reason' => '' );
+				continue;
+			}
 			$product = self::resolve_direct_item_product( $line, $warnings );
 			if ( is_wp_error( $product ) ) { return $product; }
 			$catalog = (float) $product->get_price();
@@ -1215,6 +1624,7 @@ final class Epic_Admin_Dashboard {
 			$item->set_total( $line_total );
 			$order->add_item( $item );
 			$resolved[] = array( 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'name' => $product->get_name(), 'sku' => $product->get_sku(), 'quantity' => $line['quantity'], 'unit_price' => $unit_price, 'catalog_price' => $catalog, 'line_total' => $line_total, 'override_reason' => $line['override_reason'] );
+			$resolved[ count( $resolved ) - 1 ]['kind'] = 'catalog';
 			if ( null !== $line['unit_price'] && abs( $line['unit_price'] - $catalog ) > 0.0001 ) { $warnings[] = sprintf( 'Giá dòng "%s" đã được sửa so với giá niêm yết %s.', $product->get_name(), wp_strip_all_tags( wc_price( $catalog ) ) ); }
 			if ( ! $product->is_in_stock() && ! $product->backorders_allowed() ) { $warnings[] = sprintf( 'Sản phẩm "%s" đang hết hàng.', $product->get_name() ); }
 		}
@@ -1289,6 +1699,7 @@ final class Epic_Admin_Dashboard {
 		foreach ( $order->get_items( array( 'line_item', 'fee', 'shipping', 'coupon' ) ) as $item_id => $item ) { $order->remove_item( $item_id ); }
 		$discard = array();
 		foreach ( $computed['items'] as $line ) {
+			if ( 'custom' === ( $line['kind'] ?? 'catalog' ) ) { continue; }
 			$product = self::resolve_direct_item_product( array( 'product_id' => $line['product_id'], 'variation_id' => $line['variation_id'], 'unit_price' => $line['unit_price'] ), $discard );
 			if ( is_wp_error( $product ) ) { return $product; }
 			$item = new WC_Order_Item_Product();
@@ -1299,9 +1710,33 @@ final class Epic_Admin_Dashboard {
 			if ( '' !== $line['override_reason'] ) { $item->add_meta_data( '_epic_price_override_reason', $line['override_reason'] ); }
 			$order->add_item( $item );
 		}
-		foreach ( $draft['coupon_codes'] as $code ) {
-			$applied = $order->apply_coupon( $code );
-			if ( is_wp_error( $applied ) ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s": %s', $code, $applied->get_error_message() ) ); }
+		$exclude_custom_blends = static function ( $items ) {
+			return array_filter( $items, static function ( $entry ) {
+				$item = $entry->object ?? null;
+				return ! ( $item instanceof WC_Order_Item_Product && 'yes' === $item->get_meta( '_epic_custom_blend', true ) );
+			} );
+		};
+		add_filter( 'woocommerce_coupon_get_items_to_apply', $exclude_custom_blends, 10, 1 );
+		try {
+			foreach ( $draft['coupon_codes'] as $code ) {
+				$applied = $order->apply_coupon( $code );
+				if ( is_wp_error( $applied ) ) { return self::error( 'invalid_coupon', sprintf( 'Coupon "%s": %s', $code, $applied->get_error_message() ) ); }
+			}
+		} finally {
+			remove_filter( 'woocommerce_coupon_get_items_to_apply', $exclude_custom_blends, 10 );
+		}
+		foreach ( $computed['items'] as $line ) {
+			if ( 'custom' !== ( $line['kind'] ?? '' ) ) { continue; }
+			$item = new WC_Order_Item_Product();
+			$item->set_name( $line['name'] );
+			$item->set_quantity( $line['quantity'] );
+			$item->set_subtotal( $line['line_total'] );
+			$item->set_total( $line['line_total'] );
+			$item->add_meta_data( '_epic_custom_blend', 'yes', true );
+			$item->add_meta_data( '_epic_custom_package_size_g', $line['package_size_g'], true );
+			$item->add_meta_data( 'Quy cách gói', 1000 === (int) $line['package_size_g'] ? '1 kg' : $line['package_size_g'] . ' g', true );
+			if ( '' !== $line['recipe'] ) { $item->add_meta_data( 'Tỷ lệ pha', $line['recipe'], true ); }
+			$order->add_item( $item );
 		}
 		if ( $computed['totals']['manual_discount'] > 0 && is_array( $draft['manual_discount'] ) ) {
 			$amount = -1 * (float) $computed['totals']['manual_discount'];
@@ -1309,6 +1744,7 @@ final class Epic_Admin_Dashboard {
 			$fee->set_name( 'Giảm giá: ' . $draft['manual_discount']['reason'] );
 			$fee->set_amount( $amount );
 			$fee->set_total( $amount );
+			$fee->add_meta_data( '_epic_manual_discount', wp_json_encode( $draft['manual_discount'] ), true );
 			$order->add_item( $fee );
 		}
 		foreach ( $draft['fee_lines'] as $line ) {
@@ -1638,7 +2074,9 @@ final class Epic_Admin_Dashboard {
 					'ward_id' => (int) $order->get_meta( '_epic_ward_id' ),
 					'ward_name' => (string) $order->get_meta( '_epic_ward_name' ),
 					'shipping_fee' => $order->get_shipping_total(),
-					'items' => array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); return array( 'item_id' => $item->get_id(), 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ),
+					'items' => array_values( array_map( static function ( $item ) { $product = $item->get_product(); $quantity = max( 1, (int) $item->get_quantity() ); $custom = 'yes' === (string) $item->get_meta( '_epic_custom_blend', true ); return array( 'item_id' => $item->get_id(), 'kind' => $custom ? 'custom' : 'catalog', 'product_id' => $item->get_product_id(), 'variation_id' => $item->get_variation_id(), 'name' => $item->get_name(), 'sku' => $product ? $product->get_sku() : '', 'quantity' => $item->get_quantity(), 'unit_price' => (float) $item->get_total() / $quantity, 'package_size_g' => $custom ? absint( $item->get_meta( '_epic_custom_package_size_g', true ) ) : 0, 'recipe' => $custom ? (string) $item->get_meta( 'Tỷ lệ pha', true ) : '', 'override_reason' => (string) $item->get_meta( '_epic_price_override_reason' ), 'total' => $item->get_total() ); }, $order->get_items() ) ),
+					'fee_lines' => array_values( array_map( static function ( $fee ) { return array( 'name' => $fee->get_name(), 'amount' => (float) $fee->get_total() ); }, array_filter( $order->get_items( 'fee' ), static function ( $fee ) { return '' === (string) $fee->get_meta( '_epic_manual_discount', true ) && 0 !== strpos( (string) $fee->get_name(), 'Giảm giá:' ); } ) ) ),
+					'manual_discount' => self::direct_order_manual_discount( $order ),
 					'coupon_codes' => array_values( array_map( static function ( $coupon ) { return $coupon->get_code(); }, $order->get_coupons() ) ),
 					'notes' => wc_get_order_notes( array( 'order_id' => $id ) ),
 					'customer_note' => (string) $order->get_customer_note(),
@@ -1673,6 +2111,12 @@ final class Epic_Admin_Dashboard {
 			$tracking        = (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_ORDER_NUMBER );
 			$recipient_name  = $order->get_formatted_shipping_full_name() ? $order->get_formatted_shipping_full_name() : $order->get_formatted_billing_full_name();
 			$recipient_phone = $order->get_shipping_phone() ? $order->get_shipping_phone() : $order->get_billing_phone();
+			// The courier's all-in fee (main freight + fuel surcharge + VAT).
+			// Older shipments stored only the main-freight component in
+			// `_vtp_fee`; prefer the itemized breakdown's total when present.
+			$cost_breakdown  = self::shipment_cost_breakdown( $order );
+			$stored_fee      = (float) $order->get_meta( Epic_VTP_Order_Meta_Box::META_FEE );
+			$courier_fee     = is_array( $cost_breakdown ) && isset( $cost_breakdown['total'] ) && (int) $cost_breakdown['total'] > 0 ? (int) $cost_breakdown['total'] : (int) $stored_fee;
 			return rest_ensure_response( array(
 				'id' => $id,
 				'number' => $order->get_order_number(),
@@ -1696,9 +2140,12 @@ final class Epic_Admin_Dashboard {
 				'service' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_SERVICE ),
 				'province' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_PROVINCE_NAME ),
 				'cod_amount' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_COD_AMOUNT ),
-				'courier_fee' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_FEE ),
+				'courier_fee' => (string) $courier_fee,
+				'courier_base_fee' => is_array( $cost_breakdown ) && isset( $cost_breakdown['main_fee'] ) ? (string) (int) $cost_breakdown['main_fee'] : '',
+				'fuel_surcharge' => is_array( $cost_breakdown ) && isset( $cost_breakdown['fuel_surcharge'] ) ? (string) (int) $cost_breakdown['fuel_surcharge'] : '',
+				'vat' => is_array( $cost_breakdown ) && isset( $cost_breakdown['vat'] ) ? (string) (int) $cost_breakdown['vat'] : '',
 				'quoted_shipping' => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
-				'cost_breakdown' => self::shipment_cost_breakdown( $order ),
+				'cost_breakdown' => $cost_breakdown,
 				'needs_action' => (string) $order->get_meta( Epic_VTP_Order_Meta_Box::META_NEEDS_ACTION ),
 				'recipient_name' => $recipient_name,
 				'recipient_phone' => $recipient_phone,
@@ -1828,7 +2275,7 @@ final class Epic_Admin_Dashboard {
 
 	private static function order_revision( $order ) {
 		$items = array();
-		foreach ( $order->get_items() as $item ) { $items[] = array( $item->get_id(), $item->get_name(), $item->get_quantity(), $item->get_total() ); }
+		foreach ( $order->get_items() as $item ) { $items[] = array( $item->get_id(), $item->get_name(), $item->get_quantity(), $item->get_total(), (string) $item->get_meta( '_epic_custom_blend', true ), (int) $item->get_meta( '_epic_custom_package_size_g', true ), (string) $item->get_meta( 'Tỷ lệ pha', true ) ); }
 		$notes = array_map( static function ( $note ) { return isset( $note->id ) ? (int) $note->id : 0; }, wc_get_order_notes( array( 'order_id' => $order->get_id() ) ) );
 		return hash( 'sha256', wp_json_encode( array( $order->get_data(), $items, $notes ) ) );
 	}

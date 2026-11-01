@@ -105,7 +105,13 @@ class Epic_VTP_Webhook {
 		if ( ! empty( $data['EXPECTED_DELIVERY'] ) && is_string( $data['EXPECTED_DELIVERY'] ) ) {
 			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_EXPECTED, sanitize_text_field( $data['EXPECTED_DELIVERY'] ) );
 		}
-		if ( isset( $data['MONEY_TOTALFEE'] ) ) {
+		// Store the courier's all-in fee (main freight + fuel surcharge + VAT),
+		// not the main-freight component: the dashboard's "courier fee" and the
+		// quoted-vs-actual delta must reflect what ViettelPost actually charges.
+		// The base component stays available in the cost breakdown below.
+		if ( isset( $data['MONEY_TOTAL'] ) ) {
+			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_FEE, (string) (int) $data['MONEY_TOTAL'] );
+		} elseif ( isset( $data['MONEY_TOTALFEE'] ) ) {
 			$order->update_meta_data( Epic_VTP_Order_Meta_Box::META_FEE, (string) (int) $data['MONEY_TOTALFEE'] );
 		}
 
