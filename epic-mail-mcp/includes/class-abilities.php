@@ -236,6 +236,23 @@ class Epic_Mail_MCP_Abilities {
 	 * @return array
 	 */
 	private static function mailer_status( $input ) {
+		try {
+			return self::build_mailer_status( $input );
+		} catch ( \Throwable $e ) {
+			return array(
+				'abilities_available' => true,
+				'status_error'        => $e->getMessage(),
+			);
+		}
+	}
+
+	/**
+	 * Build the mailer status payload.
+	 *
+	 * @param array $input Ability input.
+	 * @return array
+	 */
+	private static function build_mailer_status( $input ) {
 		$settings  = Epic_Mail_MCP_Sender::mailer_settings();
 		$allowlist = Epic_Mail_MCP_Sender::allowlist();
 
@@ -247,6 +264,9 @@ class Epic_Mail_MCP_Abilities {
 			'mailer_label'            => $settings['mailer_label'],
 			'from_email'              => $settings['from_email'],
 			'from_name'               => $settings['from_name'],
+			'from_email_forced'       => $settings['from_email_force'],
+			'smtp_host'               => $settings['smtp_host'],
+			'smtp_port'               => $settings['smtp_port'],
 			'debug_events_logging'    => $settings['debug_logging'],
 			'last_error'              => Epic_Mail_MCP_Sender::last_recorded_error(),
 			'allowlist_count'         => count( $allowlist ),

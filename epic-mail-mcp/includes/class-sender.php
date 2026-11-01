@@ -253,31 +253,37 @@ class Epic_Mail_MCP_Sender {
 	 */
 	public static function mailer_settings() {
 		$settings = array(
-			'mailer'        => '',
-			'mailer_label'  => 'unknown',
-			'from_email'    => '',
-			'from_name'     => '',
-			'debug_logging' => false,
-			'smtp_host'     => '',
+			'mailer'           => '',
+			'mailer_label'     => 'unknown',
+			'from_email'       => '',
+			'from_name'        => '',
+			'from_email_force' => false,
+			'debug_logging'    => false,
+			'smtp_host'        => '',
+			'smtp_port'        => '',
 		);
 
 		if ( class_exists( '\WPMailSMTP\Options' ) && method_exists( '\WPMailSMTP\Options', 'init' ) ) {
-			$options                   = \WPMailSMTP\Options::init();
-			$settings['mailer']        = (string) $options->get( 'mail', 'mailer' );
-			$settings['from_email']    = (string) $options->get( 'mail', 'from_email' );
-			$settings['from_name']     = (string) $options->get( 'mail', 'from_name' );
+			$options                      = \WPMailSMTP\Options::init();
+			$settings['mailer']           = (string) $options->get( 'mail', 'mailer' );
+			$settings['from_email']       = (string) $options->get( 'mail', 'from_email' );
+			$settings['from_name']        = (string) $options->get( 'mail', 'from_name' );
+			$settings['from_email_force'] = (bool) $options->get( 'mail', 'from_email_force' );
 			// WP Mail SMTP gates verbose debug events on debug_events.email_debug.
 			// Errors are always recorded; only the verbose entries are optional.
 			$settings['debug_logging'] = (bool) $options->get( 'debug_events', 'email_debug' );
 			$settings['smtp_host']     = (string) $options->get( 'smtp', 'host' );
+			$settings['smtp_port']     = (string) $options->get( 'smtp', 'port' );
 		} else {
 			$option = get_option( 'wp_mail_smtp', array() );
 			if ( is_array( $option ) ) {
-				$settings['mailer']        = isset( $option['mail']['mailer'] ) ? (string) $option['mail']['mailer'] : '';
-				$settings['from_email']    = isset( $option['mail']['from_email'] ) ? (string) $option['mail']['from_email'] : '';
-				$settings['from_name']     = isset( $option['mail']['from_name'] ) ? (string) $option['mail']['from_name'] : '';
-				$settings['smtp_host']     = isset( $option['smtp']['host'] ) ? (string) $option['smtp']['host'] : '';
-				$settings['debug_logging'] = ! empty( $option['debug_events']['email_debug'] );
+				$settings['mailer']           = isset( $option['mail']['mailer'] ) ? (string) $option['mail']['mailer'] : '';
+				$settings['from_email']       = isset( $option['mail']['from_email'] ) ? (string) $option['mail']['from_email'] : '';
+				$settings['from_name']        = isset( $option['mail']['from_name'] ) ? (string) $option['mail']['from_name'] : '';
+				$settings['from_email_force'] = ! empty( $option['mail']['from_email_force'] );
+				$settings['smtp_host']        = isset( $option['smtp']['host'] ) ? (string) $option['smtp']['host'] : '';
+				$settings['smtp_port']        = isset( $option['smtp']['port'] ) ? (string) $option['smtp']['port'] : '';
+				$settings['debug_logging']    = ! empty( $option['debug_events']['email_debug'] );
 			}
 		}
 
