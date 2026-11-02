@@ -8,12 +8,14 @@ import {
   FAQ_GROUP_LABELS,
   FAQ_LOCALES,
   FAQ_LOCALE_LABELS,
+  applyTranslations,
   faqBundleSummary,
   faqCompleteness,
   faqDisplayTitle,
   faqDraftFromRecord,
   faqListQuery,
   faqSavePayload,
+  faqTranslationSource,
   validateFaqDraft,
 } from "@/lib/faq-workflows.js";
 
@@ -104,6 +106,7 @@ export function FaqManager() {
   const [snapshot, setSnapshot] = useState("");
   const [editorError, setEditorError] = useState("");
   const [editorTab, setEditorTab] = useState("vi");
+  const [translating, setTranslating] = useState(false);
   const [bundleLang, setBundleLang] = useState("vi");
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [bundleError, setBundleError] = useState("");
@@ -209,6 +212,32 @@ export function FaqManager() {
   async function saveDraft() {
     if (!draft) return null;
     return persist(draft);
+  }
+
+  async function autoTranslate() {
+    if (!draft) return;
+    const source = faqTranslationSource(draft);
+    if (!source) { setEditorError("Nhập câu hỏi và câu trả lời tiếng Việt trước khi dịch."); return; }
+    setTranslating(true);
+    setEditorError("");
+    try {
+      const data = await api<{ translations: Record<string, { question?: unknown; answer?: unknown }> }>("/translate", {
+        method: "POST",
+        body: JSON.stringify(source),
+      });
+      const hasExisting = Object.keys(data.translations ?? {}).some((locale) => {
+        const entry = draft.translations?.[locale];
+        return Boolean(entry?.question?.trim() || entry?.answer?.trim());
+      });
+      const overwrite = hasExisting ? window.confirm("Một số ngôn ngữ đã có nội dung. Ghi đè bằng bản dịch mới?") : false;
+      const result = applyTranslations(draft, data.translations ?? {}, { overwrite });
+      setDraft(result.draft);
+      setNotice(`Đã dịch ${result.applied.length} ngôn ngữ${result.skipped.length ? `, giữ nguyên ${result.skipped.length} ngôn ngữ đã có nội dung` : ""}. Hãy rà soát trước khi lưu và xuất bản.`);
+    } catch (cause) {
+      setEditorError(cause instanceof Error ? cause.message : "Không dịch được FAQ. Kiểm tra cấu hình webhook dịch thuật.");
+    } finally {
+      setTranslating(false);
+    }
   }
 
   async function publishDraft() {
@@ -410,6 +439,7 @@ export function FaqManager() {
           <div className="detail-section">
             <div className="toolbar" style={{ flexWrap: "wrap" }} role="tablist" aria-label="Ngôn ngữ">
               {FAQ_LOCALES.map((locale) => <button key={locale} type="button" role="tab" aria-selected={editorTab === locale} className={editorTab === locale ? "action-button" : "quiet-button"} onClick={() => setEditorTab(locale)}>{FAQ_LOCALE_LABELS[locale as keyof typeof FAQ_LOCALE_LABELS]}{completeness.filled.includes(locale) ? " ✓" : ""}</button>)}
+              <button className="quiet-button" type="button" disabled={busy || translating || !faqTranslationSource(draft)} onClick={() => void autoTranslate()}>{translating ? "Đang dịch…" : "Dịch tự động từ tiếng Việt"}</button>
             </div>
             <p className="muted">{completeness.filled.length}/7 ngôn ngữ đã đủ. Bắt buộc dịch đủ 7 ngôn ngữ trước khi xuất bản.</p>
             <label htmlFor="faq-question">Câu hỏi ({FAQ_LOCALE_LABELS[editorTab as keyof typeof FAQ_LOCALE_LABELS]})</label>

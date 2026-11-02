@@ -11,14 +11,32 @@ import {
   formatDuration,
   guessColumnMap,
   parseCsv,
+  slugifyTemplate,
   statusBadge,
+  TEMPLATE_CONTENT_KEYS,
+  TEMPLATE_MODE_LABELS,
+  TEMPLATE_STATUS_LABELS,
   validateCampaignDraft,
   validateSchedule,
+  validateTemplateDraft,
 } from "@/lib/mail-campaigns.js";
 
 type Template = {
-  slug: string; label: string; locales: string[]; required: string[]; vars: string[];
+  id: number; slug: string; label: string; locales: string[]; required: string[]; vars: string[];
   subjects: Record<string, string>; sample: Record<string, string>; group: string;
+  mode: "preset" | "html"; layout: string; status: "active" | "inactive"; source: string;
+  content: Record<string, string>; body_html: string; in_use: number; revision: string;
+};
+type TemplateLayout = {
+  slug: string; label: string; subjects: Record<string, string>; required: string[]; vars: string[];
+  sample: Record<string, string>;
+};
+type TemplatePreview = { subject: string; html: string; text: string };
+type TemplateForm = {
+  label: string; slug: string; mode: "preset" | "html"; layout: string;
+  subjects: { vi: string; en: string };
+  content: { headline: string; body: string; note: string; cta_label: string; cta_url: string; last_order_hint: string };
+  body_html: string; status: "active" | "inactive";
 };
 type Delivery = { max_per_hour: number; used_this_hour: number; remaining: number; window_resets_at: string; spacing_seconds: number };
 type Campaign = {
@@ -62,6 +80,33 @@ function formFromCampaign(campaign: Campaign): Form {
   };
 }
 
+const blankTemplateForm: TemplateForm = {
+  label: "", slug: "", mode: "preset", layout: "",
+  subjects: { vi: "", en: "" },
+  content: { headline: "", body: "", note: "", cta_label: "", cta_url: "", last_order_hint: "" },
+  body_html: "", status: "active",
+};
+
+function templateFormFrom(template: Template): TemplateForm {
+  return {
+    label: template.label, slug: template.slug, mode: template.mode, layout: template.layout,
+    subjects: {
+      vi: template.subjects?.vi ?? "",
+      en: template.subjects?.en ?? "",
+    },
+    content: {
+      headline: template.content?.headline ?? "",
+      body: template.content?.body ?? "",
+      note: template.content?.note ?? "",
+      cta_label: template.content?.cta_label ?? "",
+      cta_url: template.content?.cta_url ?? "",
+      last_order_hint: template.content?.last_order_hint ?? "",
+    },
+    body_html: template.body_html ?? "",
+    status: template.status === "inactive" ? "inactive" : "active",
+  };
+}
+
 function payload(form: Form) {
   return {
     name: form.name, kind: form.kind, source: form.source, template: form.template,
@@ -99,6 +144,12 @@ async function saveBlob(response: Response, fallbackName: string) {
 
 export function MailCampaigns() {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [layouts, setLayouts] = useState<TemplateLayout[]>([]);
+  const [templatePanelOpen, setTemplatePanelOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [templateForm, setTemplateForm] = useState<TemplateForm>(blankTemplateForm);
+  const [templatePreview, setTemplatePreview] = useState<TemplatePreview | null>(null);
+  const [templateBusy, setTemplateBusy] = useState(false);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [testTo, setTestTo] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -131,6 +182,7 @@ export function MailCampaigns() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Không tải được mẫu email");
       setTemplates(payload.items ?? []);
+      setLayouts(payload.layouts ?? []);
       setDelivery(payload.delivery ?? null);
       setTestTo(payload.test_to ?? "");
     } catch (e) {
@@ -206,6 +258,84 @@ export function MailCampaigns() {
         last_order_hint: current.last_order_hint || sample.last_order_hint || "",
       };
     });
+  }
+
+  function openTemplate(template: Template | null) {
+    setError(""); setNotice(""); setTemplatePreview(null);
+    setEditingTemplate(template);
+    setTemplateForm(template ? templateFormFrom(template) : { ...blankTemplateForm, content: { ...blankTemplateForm.content }, subjects: { ...blankTemplateForm.subjects } });
+  }
+
+  function chooseLayout(slug: string) {
+    const layout = layouts.find((item) => item.slug === slug);
+    setTemplateForm((current) => {
+      const content = { ...current.content };
+      for (const key of TEMPLATE_CONTENT_KEYS) {
+        if (!content[key as keyof typeof content] && layout?.sample?.[key]) content[key as keyof typeof content] = layout.sample[key];
+      }
+      return {
+        ...current,
+        layout: slug,
+        subjects: {
+          vi: current.subjects.vi || layout?.subjects?.vi || "",
+          en: current.subjects.en || layout?.subjects?.en || "",
+        },
+        content,
+      };
+    });
+  }
+
+  async function saveTemplate(event: FormEvent) {
+    event.preventDefault(); setTemplateBusy(true); setError(""); setNotice(""); setTemplatePreview(null);
+    try {
+      const validated = validateTemplateDraft(templateForm);
+      const response = await apiFetch(editingTemplate ? `/api/dashboard/mail-campaigns/templates/${editingTemplate.id}` : "/api/dashboard/mail-campaigns/templates", {
+        method: editingTemplate ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ ...validated, ...(editingTemplate ? { expected_revision: editingTemplate.revision } : {}) }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không lưu được mẫu email");
+      setEditingTemplate(result.template);
+      setTemplateForm(templateFormFrom(result.template));
+      setNotice(editingTemplate ? "Đã lưu mẫu email." : "Đã tạo mẫu email. Mẫu xuất hiện trong danh sách chọn khi soạn chiến dịch.");
+      await loadTemplates();
+    } catch (e) { setError(e instanceof Error ? e.message : "Không lưu được mẫu email"); }
+    finally { setTemplateBusy(false); }
+  }
+
+  async function previewTemplate() {
+    setTemplateBusy(true); setError("");
+    try {
+      const validated = validateTemplateDraft(templateForm);
+      const response = await apiFetch("/api/dashboard/mail-campaigns/templates/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validated, locale: form.locale }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không xem trước được mẫu");
+      setTemplatePreview(result.preview);
+    } catch (e) { setError(e instanceof Error ? e.message : "Không xem trước được mẫu"); }
+    finally { setTemplateBusy(false); }
+  }
+
+  async function removeTemplate() {
+    if (!editingTemplate) return;
+    if (!window.confirm(`Xoá mẫu “${editingTemplate.label}”? Chỉ xoá được khi chưa có chiến dịch nào dùng.`)) return;
+    setTemplateBusy(true); setError(""); setNotice("");
+    try {
+      const response = await apiFetch(`/api/dashboard/mail-campaigns/templates/${editingTemplate.id}`, {
+        method: "DELETE",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không xoá được mẫu email");
+      setNotice("Đã xoá mẫu email.");
+      openTemplate(null);
+      await loadTemplates();
+    } catch (e) { setError(e instanceof Error ? e.message : "Không xoá được mẫu email"); }
+    finally { setTemplateBusy(false); }
   }
 
   async function createOrSave(event: FormEvent) {
@@ -344,11 +474,92 @@ export function MailCampaigns() {
   return <>
     <div className="page-heading">
       <div><div className="eyebrow">EPIC / Tiếp thị</div><h1>Chiến dịch email</h1><p>Nhập danh sách, gửi theo mẫu đã duyệt và theo dõi từng địa chỉ: PENDING, SUCCESS, FAILED và ĐÃ PHẢN HỒI.</p></div>
-      <button className="quiet-button" type="button" onClick={reset}>Tạo chiến dịch</button>
+      <div className="toolbar">
+        <button className="quiet-button" type="button" onClick={() => { const next = !templatePanelOpen; setTemplatePanelOpen(next); if (next) openTemplate(null); }}>{templatePanelOpen ? "Đóng mẫu email" : "Mẫu email"}</button>
+        <button className="quiet-button" type="button" onClick={reset}>Tạo chiến dịch</button>
+      </div>
     </div>
     {notice && <div className="success-box" role="status">{notice}</div>}
     {error && <div className="error-box" role="alert">{error}</div>}
     {delivery && <p className="muted">Hạn mức gửi chiến dịch: {delivery.max_per_hour} mail/giờ · còn {delivery.remaining} trong giờ này · cách nhau {Math.round(delivery.spacing_seconds / 60)} phút mỗi thư.</p>}
+
+    {templatePanelOpen && <section className="card" style={{ marginBottom: 16 }}>
+      <div className="toolbar" style={{ flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0 }}>Mẫu email chiến dịch</h2>
+        <span className="muted">{templates.length} mẫu · preset dùng bố cục đã duyệt, HTML chỉ thay khối thân trong khung EPIC</span>
+        <button className="quiet-button" type="button" disabled={templateBusy} onClick={() => openTemplate(null)}>Tạo mẫu</button>
+        <button className="quiet-button" type="button" onClick={() => setTemplatePanelOpen(false)}>Đóng</button>
+      </div>
+      <div className="summary-grid">
+        <section className="section-card">
+          <div className="toolbar"><h3 style={{ margin: 0 }}>Danh sách mẫu</h3><span className="muted">Bấm để sửa</span></div>
+          {templates.map((template) => <button key={template.id} type="button" className="alert-row campaign-row" onClick={() => openTemplate(template)} aria-current={editingTemplate?.id === template.id ? "true" : undefined}>
+            <span>
+              <strong>{template.label}</strong>
+              <small style={{ display: "block", color: "var(--muted)", marginTop: 4 }}>
+                {template.slug} · {TEMPLATE_MODE_LABELS[template.mode]} · {TEMPLATE_STATUS_LABELS[template.status]} · {template.in_use} chiến dịch · {template.source === "builtin" ? "hệ thống" : "tự tạo"}
+              </small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>)}
+          {!templates.length && <p className="empty">Chưa có mẫu email.</p>}
+        </section>
+
+        <section className="section-card">
+          <h3 style={{ marginTop: 0 }}>{editingTemplate ? `Sửa mẫu #${editingTemplate.id}` : "Tạo mẫu email"}</h3>
+          <form onSubmit={(event) => void saveTemplate(event)} style={{ display: "grid", gap: 10 }}>
+            <label htmlFor="template-label">Tên mẫu</label>
+            <input id="template-label" className="search-input" value={templateForm.label} disabled={templateBusy} maxLength={200} onChange={(event) => setTemplateForm({ ...templateForm, label: event.target.value })} required />
+            <label htmlFor="template-slug">Mã mẫu (slug)</label>
+            <input id="template-slug" className="search-input" value={templateForm.slug} disabled={templateBusy || Boolean(editingTemplate && editingTemplate.in_use > 0)} onChange={(event) => setTemplateForm({ ...templateForm, slug: event.target.value })} placeholder={slugifyTemplate(templateForm.label)} />
+            {editingTemplate && editingTemplate.in_use > 0 && <small className="muted">Mẫu đang được {editingTemplate.in_use} chiến dịch dùng nên không đổi được mã.</small>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div><label htmlFor="template-mode">Kiểu mẫu</label><select id="template-mode" className="search-input" value={templateForm.mode} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, mode: event.target.value as TemplateForm["mode"], layout: event.target.value === "html" ? "" : templateForm.layout })}><option value="preset">Bố cục có sẵn</option><option value="html">HTML nâng cao</option></select></div>
+              <div><label htmlFor="template-status">Trạng thái</label><select id="template-status" className="search-input" value={templateForm.status} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, status: event.target.value as TemplateForm["status"] })}><option value="active">Đang dùng</option><option value="inactive">Tạm ẩn (không hiện khi chọn)</option></select></div>
+            </div>
+            {templateForm.mode === "preset" && <>
+              <label htmlFor="template-layout">Bố cục đã duyệt</label>
+              <select id="template-layout" className="search-input" value={templateForm.layout} disabled={templateBusy} onChange={(event) => chooseLayout(event.target.value)} required>
+                <option value="">Chọn bố cục…</option>
+                {layouts.map((layout) => <option key={layout.slug} value={layout.slug}>{layout.label} ({layout.slug})</option>)}
+              </select>
+              <small className="muted">Bố cục quyết định khung HTML; mẫu chỉ cung cấp tiêu đề và nội dung mặc định.</small>
+            </>}
+            {templateForm.mode === "html" && <>
+              <label htmlFor="template-html">Khối HTML thân thư</label>
+              <textarea id="template-html" className="search-input" style={{ minHeight: 180, padding: 10, fontFamily: "monospace" }} value={templateForm.body_html} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, body_html: event.target.value })} placeholder={'<p style="margin:0 0 18px">Kính gửi {{name}},</p>\n<p style="margin:0 0 18px">{{body}}</p>'} required />
+              <small className="muted">Nội dung được lọc bằng wp_kses_post và luôn nằm trong khung EPIC. Dùng placeholder: {"{{name}}, {{company}}, {{headline}}, {{body}}, {{cta_label}}, {{cta_url}}, {{note}}, {{last_order_hint}}"}.</small>
+            </>}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div><label htmlFor="template-subject-vi">Tiêu đề mặc định (VI)</label><input id="template-subject-vi" className="search-input" value={templateForm.subjects.vi} disabled={templateBusy} maxLength={255} onChange={(event) => setTemplateForm({ ...templateForm, subjects: { ...templateForm.subjects, vi: event.target.value } })} /></div>
+              <div><label htmlFor="template-subject-en">Tiêu đề mặc định (EN)</label><input id="template-subject-en" className="search-input" value={templateForm.subjects.en} disabled={templateBusy} maxLength={255} onChange={(event) => setTemplateForm({ ...templateForm, subjects: { ...templateForm.subjects, en: event.target.value } })} /></div>
+            </div>
+            <label htmlFor="template-headline">Tiêu đề lớn mặc định</label>
+            <input id="template-headline" className="search-input" value={templateForm.content.headline} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, content: { ...templateForm.content, headline: event.target.value } })} />
+            <label htmlFor="template-body">Nội dung mặc định (văn bản thuần)</label>
+            <textarea id="template-body" className="search-input" style={{ minHeight: 100, padding: 10 }} value={templateForm.content.body} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, content: { ...templateForm.content, body: event.target.value } })} />
+            <label htmlFor="template-note">Ghi chú mặc định</label>
+            <input id="template-note" className="search-input" value={templateForm.content.note} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, content: { ...templateForm.content, note: event.target.value } })} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div><label htmlFor="template-cta-label">Nhãn nút</label><input id="template-cta-label" className="search-input" value={templateForm.content.cta_label} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, content: { ...templateForm.content, cta_label: event.target.value } })} /></div>
+              <div><label htmlFor="template-cta-url">Liên kết nút</label><input id="template-cta-url" className="search-input" value={templateForm.content.cta_url} disabled={templateBusy} placeholder="https://…" onChange={(event) => setTemplateForm({ ...templateForm, content: { ...templateForm.content, cta_url: event.target.value } })} /></div>
+            </div>
+            <label htmlFor="template-hint">Gợi ý đơn trước (mẫu nhắc mua lại)</label>
+            <input id="template-hint" className="search-input" value={templateForm.content.last_order_hint} disabled={templateBusy} onChange={(event) => setTemplateForm({ ...templateForm, content: { ...templateForm.content, last_order_hint: event.target.value } })} />
+            <div className="toolbar" style={{ flexWrap: "wrap" }}>
+              <button className="action-button" type="submit" disabled={templateBusy}>{editingTemplate ? "Lưu mẫu" : "Tạo mẫu"}</button>
+              <button className="quiet-button" type="button" disabled={templateBusy} onClick={() => void previewTemplate()}>Xem trước</button>
+              {editingTemplate && <button className="quiet-button danger-button" type="button" disabled={templateBusy} onClick={() => void removeTemplate()}>Xoá mẫu</button>}
+              <button className="quiet-button" type="button" disabled={templateBusy} onClick={() => openTemplate(null)}>Mẫu mới</button>
+            </div>
+          </form>
+          {templatePreview && <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+            <div className="alert-row"><span>Xem trước ({form.locale === "en" ? "EN" : "VI"})</span><strong>{templatePreview.subject}</strong></div>
+            <iframe title="Xem trước mẫu email" srcDoc={templatePreview.html} sandbox="" style={{ width: "100%", height: 520, border: "1px solid var(--line)", background: "#fff", marginTop: 10 }} />
+          </div>}
+        </section>
+      </div>
+    </section>}
 
     <div className="summary-grid">
       <section className="card section-card">
@@ -383,8 +594,9 @@ export function MailCampaigns() {
           <label htmlFor="campaign-template">Mẫu email đã duyệt</label>
           <select id="campaign-template" className="search-input" value={form.template} disabled={!canEdit} onChange={(event) => applyTemplate(event.target.value)} required>
             <option value="">Chọn mẫu…</option>
-            {templates.map((template) => <option key={template.slug} value={template.slug}>{template.label}{template.group === "campaign" ? "" : " · dùng chung"}</option>)}
+            {templates.filter((template) => template.status !== "inactive" || template.slug === form.template).map((template) => <option key={template.slug} value={template.slug}>{template.label}{template.status === "inactive" ? " · tạm ẩn" : ""}</option>)}
           </select>
+          <small className="muted">Mẫu do EPIC quản lý trong mục <strong>Mẫu email</strong> ở đầu trang.</small>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div><label htmlFor="campaign-kind">Loại</label><select id="campaign-kind" className="search-input" value={form.kind} disabled={!canEdit} onChange={(event) => setForm({ ...form, kind: event.target.value as Form["kind"] })}><option value="outreach">Outreach (nhập tay)</option><option value="newsletter">Bản tin (opt-in)</option></select></div>
             <div><label htmlFor="campaign-locale">Ngôn ngữ</label><select id="campaign-locale" className="search-input" value={form.locale} disabled={!canEdit} onChange={(event) => setForm({ ...form, locale: event.target.value as Form["locale"] })}><option value="vi">Tiếng Việt</option><option value="en">English</option></select></div>

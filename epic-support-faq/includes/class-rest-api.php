@@ -14,6 +14,7 @@ final class Epic_Support_Faq_Rest_Api {
 		register_rest_route( self::ADMIN_NS, '/faqs/bundle', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'bundle' ), 'permission_callback' => array( __CLASS__, 'require_admin' ) ) );
 		register_rest_route( self::ADMIN_NS, '/faqs/rebuild', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'rebuild' ), 'permission_callback' => array( __CLASS__, 'require_admin' ) ) );
 		register_rest_route( self::ADMIN_NS, '/faqs/import-preview', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'import_preview' ), 'permission_callback' => array( __CLASS__, 'require_admin' ) ) );
+		register_rest_route( self::ADMIN_NS, '/faqs/translate', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'translate_faq' ), 'permission_callback' => array( __CLASS__, 'require_admin' ) ) );
 		register_rest_route( self::ADMIN_NS, '/faqs/import', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'import_seed' ), 'permission_callback' => array( __CLASS__, 'require_admin' ) ) );
 		register_rest_route( self::ADMIN_NS, '/faqs/reorder', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'reorder' ), 'permission_callback' => array( __CLASS__, 'require_admin' ) ) );
 		register_rest_route( self::ADMIN_NS, '/faqs/(?P<id>\d+)', array(
@@ -131,6 +132,14 @@ final class Epic_Support_Faq_Rest_Api {
 		$preview = Epic_Support_Faq_Store::seed_preview();
 		if ( is_wp_error( $preview ) ) { return $preview; }
 		return rest_ensure_response( $preview );
+	}
+
+	public static function translate_faq( $request ) {
+		$body = $request->get_json_params();
+		if ( ! is_array( $body ) ) { return new WP_Error( 'invalid_faq_translation', 'Send a JSON body.', array( 'status' => 400 ) ); }
+		$result = Epic_Support_Faq_Store::translate( $body['question'] ?? '', $body['answer'] ?? '' );
+		if ( is_wp_error( $result ) ) { return $result; }
+		return rest_ensure_response( $result );
 	}
 
 	public static function import_seed( $request ) {

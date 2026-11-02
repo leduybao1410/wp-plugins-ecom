@@ -39,6 +39,8 @@ export const FAQ_GROUP_PATHS = {
   assistant: "contact",
 };
 
+export const FAQ_TRANSLATE_TARGETS = ["en", "ru", "hi", "zh", "ko", "ja"];
+
 export const FAQ_MAX_QUESTION = 300;
 export const FAQ_MAX_ANSWER = 2000;
 
@@ -185,4 +187,47 @@ export function faqDisplayTitle(item) {
     if (entry && typeof entry.question === "string" && entry.question.trim()) return entry.question.trim();
   }
   return `FAQ #${item.id}`;
+}
+
+/** @param {ReturnType<typeof emptyFaqDraft>} draft */
+export function faqTranslationSource(draft) {
+  const entry = draft.translations?.vi ?? { question: "", answer: "" };
+  const question = entry.question.trim();
+  const answer = entry.answer.trim();
+  if (!question || !answer) return null;
+  return { question, answer };
+}
+
+/**
+ * Merges machine translations into the draft. Existing content is preserved
+ * unless the caller explicitly opts into overwriting it.
+ * @param {ReturnType<typeof emptyFaqDraft>} draft
+ * @param {Record<string, { question?: unknown, answer?: unknown }>} translations
+ * @param {{ overwrite?: boolean }} [options]
+ */
+export function applyTranslations(draft, translations, options = {}) {
+  const next = { ...draft, translations: { ...draft.translations } };
+  const applied = [];
+  const skipped = [];
+  for (const locale of FAQ_TRANSLATE_TARGETS) {
+    const entry = translations?.[locale];
+    if (!entry || typeof entry !== "object") {
+      skipped.push(locale);
+      continue;
+    }
+    const question = typeof entry.question === "string" ? entry.question.trim() : "";
+    const answer = typeof entry.answer === "string" ? entry.answer.trim() : "";
+    if (!question || !answer || question.length > FAQ_MAX_QUESTION || answer.length > FAQ_MAX_ANSWER) {
+      skipped.push(locale);
+      continue;
+    }
+    const current = next.translations[locale] ?? { question: "", answer: "" };
+    if (!options.overwrite && (current.question.trim() || current.answer.trim())) {
+      skipped.push(locale);
+      continue;
+    }
+    next.translations[locale] = { question, answer };
+    applied.push(locale);
+  }
+  return { draft: next, applied, skipped };
 }

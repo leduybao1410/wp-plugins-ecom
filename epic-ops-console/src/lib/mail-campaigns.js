@@ -305,3 +305,77 @@ export function formatDuration(totalMinutes) {
 
   return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
 }
+
+/** Template modes and status vocabulary shared by the manager UI. */
+export const TEMPLATE_MODES = ["preset", "html"];
+export const TEMPLATE_STATUSES = ["active", "inactive"];
+export const TEMPLATE_MODE_LABELS = { preset: "Bố cục có sẵn", html: "HTML nâng cao" };
+export const TEMPLATE_STATUS_LABELS = { active: "Đang dùng", inactive: "Tạm ẩn" };
+export const TEMPLATE_CONTENT_KEYS = ["headline", "body", "note", "cta_label", "cta_url", "last_order_hint"];
+
+/**
+ * Mirror WordPress `sanitize_title()`: fold Vietnamese diacritics, lowercase,
+ * then reduce everything else to single hyphens.
+ *
+ * @param {string} value
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export function slugifyTemplate(value, fallback = "mau-email") {
+  const normalised = String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalised || fallback;
+}
+
+/**
+ * Validate the template manager form before it reaches the adapter.
+ * The adapter re-validates everything: this is only fast feedback.
+ *
+ * @param {object} input
+ * @returns {object}
+ */
+export function validateTemplateDraft(input = {}) {
+  const label = typeof input.label === "string" ? input.label.trim() : "";
+  if (!label) throw new Error("Nhập tên mẫu email.");
+  if (label.length > 200) throw new Error("Tên mẫu tối đa 200 ký tự.");
+
+  const mode = TEMPLATE_MODES.includes(input.mode) ? input.mode : "preset";
+  const slug = slugifyTemplate(input.slug || label);
+  if (!slug) throw new Error("Nhập mã mẫu (chữ, số và dấu gạch ngang).");
+  if (slug.length > 64) throw new Error("Mã mẫu tối đa 64 ký tự.");
+
+  const layout = mode === "preset" ? String(input.layout ?? "").trim() : "";
+  if (mode === "preset" && !layout) throw new Error("Chọn bố cục đã duyệt cho mẫu.");
+
+  const subjects = {
+    vi: typeof input.subjects?.vi === "string" ? input.subjects.vi.trim() : "",
+    en: typeof input.subjects?.en === "string" ? input.subjects.en.trim() : "",
+  };
+  if (!subjects.vi && !subjects.en) throw new Error("Nhập ít nhất một tiêu đề mặc định.");
+  if (subjects.vi.length > 255 || subjects.en.length > 255) throw new Error("Tiêu đề mặc định tối đa 255 ký tự.");
+
+  const content = {};
+  for (const key of TEMPLATE_CONTENT_KEYS) {
+    const value = input.content?.[key];
+    content[key] = typeof value === "string" ? value.trim() : "";
+  }
+
+  if (content.cta_url && !/^https?:\/\/[^\s]+$/i.test(content.cta_url)) {
+    throw new Error("Liên kết nút phải bắt đầu bằng http:// hoặc https://.");
+  }
+
+  const bodyHtml = mode === "html" ? String(input.body_html ?? "").trim() : "";
+  if (mode === "html" && !bodyHtml) throw new Error("Nhập khối HTML cho mẫu.");
+  if (bodyHtml.length > 100_000) throw new Error("Khối HTML tối đa 100 KB.");
+
+  const status = TEMPLATE_STATUSES.includes(input.status) ? input.status : "active";
+
+  return { label, slug, mode, layout, subjects, content, body_html: bodyHtml, status };
+}

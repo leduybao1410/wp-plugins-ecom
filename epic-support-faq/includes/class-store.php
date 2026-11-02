@@ -10,6 +10,7 @@ final class Epic_Support_Faq_Store {
 	const STATUSES = array( 'draft', 'published' );
 	const MAX_QUESTION = 300;
 	const MAX_ANSWER = 2000;
+	const TRANSLATE_TARGETS = array( 'en', 'ru', 'hi', 'zh', 'ko', 'ja' );
 	const DEFAULT_MAX_BYTES = 60000;
 	const DEFAULT_MAX_ITEMS = 60;
 
@@ -567,6 +568,46 @@ final class Epic_Support_Faq_Store {
 			if ( $filled === count( self::LOCALES ) ) { $by_group[ $group ]['complete']++; }
 		}
 		return array( 'total' => count( $seed['items'] ), 'complete' => $complete, 'incomplete' => count( $seed['items'] ) - $complete, 'installed' => $installed, 'groups' => array_values( $by_group ), 'generated_at' => $seed['generatedAt'] ?? null );
+	}
+
+	public static function translation_config() {
+		$url = defined( 'EPIC_SUPPORT_FAQ_TRANSLATE_URL' ) && EPIC_SUPPORT_FAQ_TRANSLATE_URL ? (string) EPIC_SUPPORT_FAQ_TRANSLATE_URL : (string) get_option( 'epic_support_faq_translate_url', '' );
+		$secret = defined( 'EPIC_SUPPORT_FAQ_TRANSLATE_SECRET' ) && EPIC_SUPPORT_FAQ_TRANSLATE_SECRET ? (string) EPIC_SUPPORT_FAQ_TRANSLATE_SECRET : (string) get_option( 'epic_support_faq_translate_secret', '' );
+		return array( 'url' => esc_url_raw( $url, array( 'https' ) ), 'secret' => $secret );
+	}
+
+	/** Translate the Vietnamese source into the six other locales through the configured n8n webhook. */
+	public static function translate( $question, $answer ) {
+		$question = sanitize_textarea_field( (string) $question );
+		$answer = sanitize_textarea_field( (string) $answer );
+		$question = function_exists( 'mb_substr' ) ? mb_substr( $question, 0, self::MAX_QUESTION, 'UTF-8' ) : substr( $question, 0, self::MAX_QUESTION );
+		$answer = function_exists( 'mb_substr' ) ? mb_substr( $answer, 0, self::MAX_ANSWER, 'UTF-8' ) : substr( $answer, 0, self::MAX_ANSWER );
+		if ( '' === trim( $question ) || '' === trim( $answer ) ) { return new WP_Error( 'invalid_faq_translation', 'Enter the Vietnamese question and answer before translating.', array( 'status' => 400 ) ); }
+		$config = self::translation_config();
+		if ( ! $config['url'] || '' === $config['secret'] ) { return new WP_Error( 'faq_translation_not_configured', 'The FAQ translation webhook is not configured. Set it under Settings → EPIC Support FAQ.', array( 'status' => 503 ) ); }
+		$response = wp_remote_post( $config['url'], array(
+			'timeout' => 30,
+			'headers' => array( 'Content-Type' => 'application/json', 'X-EPIC-Faq-Key' => $config['secret'] ),
+			'body'    => wp_json_encode( array( 'question' => $question, 'answer' => $answer, 'source' => 'vi', 'targets' => self::TRANSLATE_TARGETS ) ),
+		) );
+		if ( is_wp_error( $response ) ) { return new WP_Error( 'faq_translation_unavailable', 'The translation service is unavailable. Try again shortly.', array( 'status' => 502 ) ); }
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) { return new WP_Error( 'faq_translation_failed', 'The translation service returned an error.', array( 'status' => 502 ) ); }
+		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$translations = is_array( $body ) && isset( $body['translations'] ) && is_array( $body['translations'] ) ? $body['translations'] : array();
+		$out = array();
+		foreach ( self::TRANSLATE_TARGETS as $locale ) {
+			if ( empty( $translations[ $locale ] ) || ! is_array( $translations[ $locale ] ) ) { continue; }
+			$q = sanitize_textarea_field( (string) ( $translations[ $locale ]['question'] ?? '' ) );
+			$a = sanitize_textarea_field( (string) ( $translations[ $locale ]['answer'] ?? '' ) );
+			if ( '' === trim( $q ) || '' === trim( $a ) ) { continue; }
+			$out[ $locale ] = array(
+				'question' => function_exists( 'mb_substr' ) ? mb_substr( $q, 0, self::MAX_QUESTION, 'UTF-8' ) : substr( $q, 0, self::MAX_QUESTION ),
+				'answer'   => function_exists( 'mb_substr' ) ? mb_substr( $a, 0, self::MAX_ANSWER, 'UTF-8' ) : substr( $a, 0, self::MAX_ANSWER ),
+			);
+		}
+		$missing = array_values( array_diff( self::TRANSLATE_TARGETS, array_keys( $out ) ) );
+		if ( $missing ) { return new WP_Error( 'faq_translation_incomplete', 'The translation service did not return: ' . implode( ', ', $missing ) . '.', array( 'status' => 502 ) ); }
+		return array( 'source' => 'vi', 'translations' => $out );
 	}
 
 	public static function settings() {
