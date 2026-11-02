@@ -3,7 +3,7 @@
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 final class Epic_Support_Faq_Store {
-	const DB_VERSION = '1.0';
+	const DB_VERSION = '1.1';
 	const DB_VERSION_OPTION = 'epic_support_faq_db_version';
 	const LOCALES = array( 'vi', 'en', 'ru', 'hi', 'zh', 'ko', 'ja' );
 	const GROUPS = array( 'home', 'coffee', 'visit', 'contact', 'roastery', 'wholesale', 'assistant' );
@@ -23,7 +23,12 @@ final class Epic_Support_Faq_Store {
 	}
 
 	public static function maybe_upgrade() {
-		if ( get_option( self::DB_VERSION_OPTION ) !== self::DB_VERSION ) { self::install( false ); }
+		if ( get_option( self::DB_VERSION_OPTION ) !== self::DB_VERSION ) {
+			self::install( false );
+			// Fill translations added to the bundled seed since the last version
+			// without overwriting content an administrator already edited.
+			self::import_seed( false );
+		}
 	}
 
 	public static function install( $import_seed = true ) {
@@ -130,6 +135,21 @@ final class Epic_Support_Faq_Store {
 			if ( empty( $translations[ $locale ]['question'] ) || empty( $translations[ $locale ]['answer'] ) ) { $missing[] = $locale; }
 		}
 		return $missing;
+	}
+
+	private static function merge_missing_translations( $id, $translations ) {
+		global $wpdb;
+		$tables = self::tables();
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT locale, question, answer FROM {$tables['translations']} WHERE faq_id = %d", $id ), ARRAY_A );
+		$have = array();
+		foreach ( (array) $rows as $row ) {
+			if ( '' !== $row['question'] && '' !== $row['answer'] ) { $have[ $row['locale'] ] = true; }
+		}
+		$fill = array();
+		foreach ( $translations as $locale => $row ) {
+			if ( empty( $have[ $locale ] ) && $row['question'] && $row['answer'] ) { $fill[ $locale ] = $row; }
+		}
+		if ( $fill ) { self::write_translations( $id, $fill ); }
 	}
 
 	private static function write_translations( $id, $translations ) {		global $wpdb;
@@ -490,7 +510,7 @@ final class Epic_Support_Faq_Store {
 			$existing_id = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$tables['faqs']} WHERE seed_key = %s", $key ) );
 			if ( $existing_id ) {
 				if ( $overwrite ) { self::write_translations( $existing_id, $translations ); $wpdb->update( $tables['faqs'], array( 'faq_group' => $group, 'position' => absint( $item['position'] ?? 0 ), 'updated_at' => $now ), array( 'id' => $existing_id ), array( '%s', '%d', '%s' ), array( '%d' ) ); $updated++; }
-				else { $skipped++; }
+				else { self::merge_missing_translations( $existing_id, $translations ); $skipped++; }
 				$id = $existing_id;
 			} else {
 				$inserted = $wpdb->insert( $tables['faqs'], array(
