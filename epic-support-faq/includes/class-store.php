@@ -573,6 +573,16 @@ final class Epic_Support_Faq_Store {
 	public static function translation_config() {
 		$url = defined( 'EPIC_SUPPORT_FAQ_TRANSLATE_URL' ) && EPIC_SUPPORT_FAQ_TRANSLATE_URL ? (string) EPIC_SUPPORT_FAQ_TRANSLATE_URL : (string) get_option( 'epic_support_faq_translate_url', '' );
 		$secret = defined( 'EPIC_SUPPORT_FAQ_TRANSLATE_SECRET' ) && EPIC_SUPPORT_FAQ_TRANSLATE_SECRET ? (string) EPIC_SUPPORT_FAQ_TRANSLATE_SECRET : (string) get_option( 'epic_support_faq_translate_secret', '' );
+		// Deployment-time fallback. The file starts with an ABSPATH guard so a
+		// direct request never reveals the webhook secret.
+		$deploy_file = EPIC_SUPPORT_FAQ_DIR . 'data/translate-config.php';
+		if ( ( ! $url || '' === $secret ) && is_readable( $deploy_file ) ) {
+			$deploy = include $deploy_file;
+			if ( is_array( $deploy ) ) {
+				if ( ! $url && ! empty( $deploy['url'] ) ) { $url = (string) $deploy['url']; }
+				if ( '' === $secret && ! empty( $deploy['secret'] ) ) { $secret = (string) $deploy['secret']; }
+			}
+		}
 		return array( 'url' => esc_url_raw( $url, array( 'https' ) ), 'secret' => $secret );
 	}
 

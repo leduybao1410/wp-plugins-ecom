@@ -6,3 +6,6 @@
 
 # Git metadata
 .git/
+
+# Deploy-only FAQ translation webhook config
+epic-support-faq/data/translate-config.php
