@@ -105,6 +105,7 @@ export function FaqManager() {
   const [draft, setDraft] = useState<FaqDraft | null>(null);
   const [snapshot, setSnapshot] = useState("");
   const [editorError, setEditorError] = useState("");
+  const [editorNotice, setEditorNotice] = useState("");
   const [editorTab, setEditorTab] = useState("vi");
   const [translating, setTranslating] = useState(false);
   const [bundleLang, setBundleLang] = useState("vi");
@@ -155,6 +156,7 @@ export function FaqManager() {
 
   function openEditor(record?: FaqListItem) {
     setEditorError("");
+    setEditorNotice("");
     setEditorTab("vi");
     const next = faqDraftFromRecord(record);
     setDraft(next);
@@ -168,6 +170,7 @@ export function FaqManager() {
 
   async function openExisting(id: number) {
     setEditorError("");
+    setEditorNotice("");
     try {
       const data = await api<{ faq: FaqRecord }>(`/${id}`);
       setEditorTab("vi");
@@ -191,6 +194,7 @@ export function FaqManager() {
     if (errors.length) { setEditorError(errors.join(" ")); return null; }
     setBusy(true);
     setEditorError("");
+    setEditorNotice("");
     try {
       const body = faqSavePayload(target);
       const data = target.id
@@ -232,7 +236,7 @@ export function FaqManager() {
       const overwrite = hasExisting ? window.confirm("Một số ngôn ngữ đã có nội dung. Ghi đè bằng bản dịch mới?") : false;
       const result = applyTranslations(draft, data.translations ?? {}, { overwrite });
       setDraft(result.draft);
-      setNotice(`Đã dịch ${result.applied.length} ngôn ngữ${result.skipped.length ? `, giữ nguyên ${result.skipped.length} ngôn ngữ đã có nội dung` : ""}. Hãy rà soát trước khi lưu và xuất bản.`);
+      setEditorNotice(`Đã dịch ${result.applied.length} ngôn ngữ${result.skipped.length ? `, giữ nguyên ${result.skipped.length} ngôn ngữ đã có nội dung` : ""}. Hãy rà soát trước khi lưu và xuất bản.`);
     } catch (cause) {
       setEditorError(cause instanceof Error ? cause.message : "Không dịch được FAQ. Kiểm tra cấu hình webhook dịch thuật.");
     } finally {
@@ -426,6 +430,7 @@ export function FaqManager() {
             <Dialog.Close asChild><button className="quiet-button" type="button">Đóng</button></Dialog.Close>
           </div>
           {editorError && <div className="error-box" role="alert">{editorError}</div>}
+          {editorNotice && <div className="success-box" role="status">{editorNotice}</div>}
           <div className="detail-section">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div><label htmlFor="faq-group">Nhóm</label><select id="faq-group" className="search-input" value={draft.group} onChange={(event) => setDraft({ ...draft, group: event.target.value })}>{FAQ_GROUPS.map((id) => <option key={id} value={id}>{FAQ_GROUP_LABELS[id as keyof typeof FAQ_GROUP_LABELS]}</option>)}</select></div>
