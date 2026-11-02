@@ -10,7 +10,7 @@ final class Epic_Support_Faq_Store {
 	const STATUSES = array( 'draft', 'published' );
 	const MAX_QUESTION = 300;
 	const MAX_ANSWER = 2000;
-	const DEFAULT_MAX_BYTES = 20000;
+	const DEFAULT_MAX_BYTES = 60000;
 	const DEFAULT_MAX_ITEMS = 60;
 
 	public static function tables() {
@@ -99,7 +99,7 @@ final class Epic_Support_Faq_Store {
 
 	public static function max_bytes() {
 		$value = absint( get_option( 'epic_support_faq_context_max_bytes', self::DEFAULT_MAX_BYTES ) );
-		return max( 4000, min( 20000, $value ?: self::DEFAULT_MAX_BYTES ) );
+		return max( 4000, min( 200000, $value ?: self::DEFAULT_MAX_BYTES ) );
 	}
 
 	public static function max_items() {

@@ -29,10 +29,12 @@ locale dictionaries only as an offline fallback.
 Every mutation that changes published content (create/update when published,
 publish, unpublish, delete, reorder, import) recompiles **all seven locale
 bundles**. The bundle is capped by
-`epic_support_faq_context_max_bytes` (default 20,000) and
+`epic_support_faq_context_max_bytes` (default 60,000) and
 `epic_support_faq_context_max_items` (default 60); overflow drops the lowest
 priority items and sets `truncated` so the dashboard can warn. A compile
-failure keeps the previous bundle.
+failure keeps the previous bundle. The bundle is the full catalogue for page
+rendering; the website caps only its chat request at ~9,000 bytes so the model
+prompt stays under its own 20,000-byte guard.
 
 Publishing requires **all seven translations**. Drafts may be saved with a
 partial set; a published FAQ cannot lose a translation until it is unpublished
