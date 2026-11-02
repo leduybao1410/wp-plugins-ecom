@@ -21,6 +21,7 @@ export function mapToWordPress(relativePath: string, method = "GET"): string {
   if (first === "orders" && (second === "preview" || second === "apply")) return `orders/${second}`;
   if (first === "finance" && second === "export") return "finance/export";
   if (first === "support") return segments.join("/");
+  if (first === "faqs") return segments.join("/");
   if (first === "address") return segments.join("/");
   if (first === "shipping") return segments.join("/");
   if (first === "wholesale" && second === "settings") return "wholesale/settings";

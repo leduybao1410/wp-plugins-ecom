@@ -5,6 +5,7 @@ export const modules = [
   { id: "products", label: "Sản phẩm", href: "/products", resource: "products" },
   { id: "customers", label: "Khách hàng", href: "/customers", resource: "customers" },
   { id: "support", label: "Hội thoại hỗ trợ", href: "/support/conversations", resource: "support" },
+  { id: "faqs", label: "FAQ", href: "/faqs", resource: "faqs" },
   { id: "leads", label: "Khách tiềm năng", href: "/leads", resource: "leads" },
   { id: "wholesale-orders", label: "Bán sỉ", href: "/wholesale-orders", resource: "wholesale-orders" },
   { id: "content", label: "Nội dung", href: "/content", resource: "content" },

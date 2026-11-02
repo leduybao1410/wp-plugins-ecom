@@ -1,0 +1,1133 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-02T01:51:29.926Z",
+  "groups": [
+    "home",
+    "coffee",
+    "visit",
+    "contact",
+    "roastery",
+    "wholesale"
+  ],
+  "locales": [
+    "vi",
+    "en",
+    "ru",
+    "hi",
+    "zh",
+    "ko",
+    "ja"
+  ],
+  "items": [
+    {
+      "key": "home-1",
+      "group": "home",
+      "position": 1,
+      "translations": {
+        "vi": {
+          "question": "Epic Coffee Roaster là gì?",
+          "answer": "Epic Coffee Roaster là một xưởng rang cà phê đặc sản và quán cà phê tại Sài Gòn (TP. Hồ Chí Minh), Việt Nam. Chúng tôi thu mua hạt xanh từ các nông trại cao nguyên Việt Nam và mạng lưới single origin có danh mục rõ ràng, tự rang tại xưởng từ năm 2014 và pha theo đơn tại quán trên đường Ngô Thời Nhiệm, Quận 3."
+        },
+        "en": {
+          "question": "What is Epic Coffee Roaster?",
+          "answer": "Epic Coffee Roaster is a specialty coffee roastery and café based in Sài Gòn (Ho Chi Minh City), Việt Nam. We source green coffee from Vietnamese highland farms and a catalogued single-origin network, roast in-house at our own drum roastery since 2014, and brew to order at our café on Ngô Thời Nhiệm, District 3."
+        },
+        "ru": {
+          "question": "Что такое Epic Coffee Roaster?",
+          "answer": "Epic Coffee Roaster — это специализированная обжарочная и кафе в Сайгоне (Хошимин), Вьетнам. Мы закупаем зелёное зерно с высокогорных ферм Вьетнама и из каталогизированной сети моносортов, обжариваем сами в собственном барабанном цехе с 2014 года и варим на заказ в нашем кафе на Ngô Thời Nhiệm, District 3."
+        },
+        "hi": {
+          "question": "Epic Coffee Roaster क्या है?",
+          "answer": "Epic Coffee Roaster साइगॉन (हो ची मिन्ह शहर), वियतनाम में स्थित एक स्पेशल्टी कॉफ़ी रोस्ट्री और कैफ़े है। हम वियतनाम के ऊँचाई वाले खेतों और सूचीबद्ध सिंगल-ओरिजिन नेटवर्क से हरी कॉफ़ी खरीदते हैं, 2014 से अपनी ड्रम रोस्ट्री में घर पर भूनते हैं, और District 3 के Ngô Thời Nhiệm पर अपने कैफ़े में ऑर्डर पर बनाते हैं।"
+        },
+        "zh": {
+          "question": "Epic Coffee Roaster 是什么？",
+          "answer": "Epic Coffee Roaster 是一家位于越南西贡（胡志明市）的精品咖啡烘焙坊与咖啡馆。我们从越南高原农场和名录单品网络采购生豆，自 2014 年起在自有滚筒烘焙坊烘焙，并在 District 3 的 Ngô Thời Nhiệm 咖啡馆按单现做。"
+        },
+        "ko": {
+          "question": "Epic Coffee Roaster는 무엇인가요?",
+          "answer": "Epic Coffee Roaster는 베트남 사이공(호찌민시)에 기반을 둔 스페셜티 커피 로스터리이자 카페입니다. 우리는 베트남 고원 농장과 카탈로그화된 싱글 오리진 네트워크에서 생두를 소싱해 2014년부터 자체 드럼 로스터리에서 직접 로스팅하며, District 3의 Ngô Thời Nhiệm 카페에서 주문 즉석 내립니다."
+        },
+        "ja": {
+          "question": "Epic Coffee Roasterとは何ですか？",
+          "answer": "Epic Coffee Roasterは、ベトナム・サイゴン（ホーチミン市）を拠点とするスペシャルティコーヒーのロースタリーとカフェです。ベトナムの高原農園とカタログ化されたシングルオリジンネットワークから生豆を仕入れ、2014年から自社のドラムロースタリーで焙煎し、District 3のNgô Thời Nhiệmにあるカフェで注文ごとに淹れています。"
+        }
+      }
+    },
+    {
+      "key": "home-2",
+      "group": "home",
+      "position": 2,
+      "translations": {
+        "vi": {
+          "question": "Epic Coffee Roaster ở đâu?",
+          "answer": "Quán của chúng tôi ở 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Thành phố Hồ Chí Minh, mở cửa hằng ngày từ 7:00 đến 22:30 (8:00–22:00 vào ngày lễ). Xưởng rang ở 54/8 Ao Đôi, Bình Hưng Hòa, Hồ Chí Minh."
+        },
+        "en": {
+          "question": "Where is Epic Coffee Roaster located?",
+          "answer": "Our café is at 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Thành phố Hồ Chí Minh, open every day from 7:00 to 22:30 (8:00–22:00 on public holidays). Our roastery is at 54/8 Ao Đôi, Bình Hưng Hòa, Hồ Chí Minh."
+        },
+        "ru": {
+          "question": "Где находится Epic Coffee Roaster?",
+          "answer": "Наше кафе — по адресу 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Хошимин, открыто ежедневно с 7:00 до 22:30 (8:00–22:00 в праздники). Наш обжарочный цех — 54/8 Ao Đôi, Bình Hưng Hòa, Хошимин."
+        },
+        "hi": {
+          "question": "Epic Coffee Roaster कहाँ स्थित है?",
+          "answer": "हमारा कैफ़े 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, हो ची मिन्ह शहर में है, रोज़ 7:00 से 22:30 तक खुला (सार्वजनिक अवकाश पर 8:00–22:00)। हमारी रोस्ट्री 54/8 Ao Đôi, Bình Hưng Hòa, हो ची मिन्ह में है।"
+        },
+        "zh": {
+          "question": "Epic Coffee Roaster 位于哪里？",
+          "answer": "我们的咖啡馆位于 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, 胡志明市，每天 7:00 至 22:30 营业（法定假日 8:00–22:00）。烘焙坊位于 54/8 Ao Đôi, Bình Hưng Hòa, 胡志明市。"
+        },
+        "ko": {
+          "question": "Epic Coffee Roaster는 어디에 있나요?",
+          "answer": "카페는 호찌민시 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3에 있으며 매일 7:00–22:30 영업합니다(공휴일 8:00–22:00). 로스터리는 호찌민시 54/8 Ao Đôi, Bình Hưng Hòa에 있습니다."
+        },
+        "ja": {
+          "question": "Epic Coffee Roasterはどこにありますか？",
+          "answer": "カフェはホーチミン市49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3にあり、毎日7:00から22:30まで営業しています（祝日は8:00–22:00）。ロースタリーはホーチミン市54/8 Ao Đôi, Bình Hưng Hòaにあります。"
+        }
+      }
+    },
+    {
+      "key": "home-3",
+      "group": "home",
+      "position": 3,
+      "translations": {
+        "vi": {
+          "question": "Epic có giao cà phê toàn quốc không?",
+          "answer": "Có. Mỗi đơn đều được rang theo yêu cầu tại Sài Gòn và giao đi khắp Việt Nam qua ViettelPost. Nội thành TP. HCM thường nhận trong 24 giờ sau khi gửi hàng; các tỉnh thành khác mất từ 24 đến 120 giờ."
+        },
+        "en": {
+          "question": "Does Epic ship coffee nationwide?",
+          "answer": "Yes. Every order is roasted to order in Sài Gòn and shipped across Việt Nam via ViettelPost. HCMC inner districts usually arrive within 24 hours of dispatch; all other provinces and cities take 24 to 120 hours."
+        },
+        "ru": {
+          "question": "Epic отправляет кофе по всей стране?",
+          "answer": "Да. Каждый заказ обжаривается на заказ в Сайгоне и отправляется по всему Вьетнаму через ViettelPost. Внутренние районы Хошимина обычно получают заказ в течение 24 часов после отправки; все остальные провинции и города — от 24 до 120 часов."
+        },
+        "hi": {
+          "question": "क्या Epic पूरे देश में कॉफ़ी भेजता है?",
+          "answer": "हाँ। हर ऑर्डर साइगॉन में ऑर्डर पर भुना जाता है और ViettelPost से पूरे वियतनाम में भेजा जाता है। HCMC के भीतरी ज़िलों में आमतौर पर डिस्पैच के 24 घंटे के भीतर पहुँच जाता है; अन्य सभी प्रांतों और शहरों में 24 से 120 घंटे लगते हैं।"
+        },
+        "zh": {
+          "question": "Epic 全国配送咖啡吗？",
+          "answer": "是的。每一单都在西贡按单烘焙，并通过 ViettelPost 配送至越南全境。胡志明市内城区通常在发出后 24 小时内送达；其他省市需 24 至 120 小时。"
+        },
+        "ko": {
+          "question": "Epic은 전국으로 커피를 배송하나요?",
+          "answer": "네. 모든 주문은 사이공에서 주문 시 로스팅되어 ViettelPost으로 베트남 전역에 배송됩니다. HCMC 도심 지역은 보통 발송 후 24시간 이내 도착하며, 그 외 모든 성·시는 24~120시간 걸립니다."
+        },
+        "ja": {
+          "question": "Epicは全国にコーヒーを発送しますか？",
+          "answer": "はい。すべてのご注文はサイゴンで注文ごとに焙煎し、ViettelPostでベトナム全土へ発送します。HCMCの中心部は通常発送後24時間以内に到着し、その他の省・市は24〜120時間かかります。"
+        }
+      }
+    },
+    {
+      "key": "home-4",
+      "group": "home",
+      "position": 4,
+      "translations": {
+        "vi": {
+          "question": "Epic chuyên về loại cà phê nào?",
+          "answer": "Robusta Việt Nam và arabica single origin. Danh mục có Robusta Natural dùng hằng ngày, single origin washed từ Ethiopia, Peru, Brazil và các blend espresso của quán."
+        },
+        "en": {
+          "question": "What kind of coffee does Epic specialize in?",
+          "answer": "Vietnamese robusta and single-origin arabica. Our range includes everyday Robusta Natural, washed single origins from Ethiopia, Peru and Brazil, plus house espresso blends."
+        },
+        "ru": {
+          "question": "На каком кофе специализируется Epic?",
+          "answer": "Вьетнамская робуста и моносортная арабика. В ассортименте есть повседневная Robusta Natural, мытые моносорта из Эфиопии, Перу и Бразилии, а также авторские смеси для эспрессо."
+        },
+        "hi": {
+          "question": "Epic किस तरह की कॉफ़ी में विशेषज्ञ है?",
+          "answer": "वियतनामी रोबस्टा और सिंगल-ओरिजिन अरेबिका। हमारे चयन में रोज़ाना की Robusta Natural, इथियोपिया, पेरू और ब्राज़ील की धुली सिंगल ओरिजिन, और हाउस एस्प्रेसो ब्लेंड शामिल हैं।"
+        },
+        "zh": {
+          "question": "Epic 擅长什么类型的咖啡？",
+          "answer": "越南罗布斯塔与单品阿拉比卡。我们的咖啡包括日常饮用的 Robusta Natural、来自埃塞俄比亚、秘鲁和巴西的水洗单品，以及招牌意式拼配。"
+        },
+        "ko": {
+          "question": "Epic은 어떤 종류의 커피를 전문으로 하나요?",
+          "answer": "베트남 로부스타와 싱글 오리진 아라비카입니다. 매일 마시는 Robusta Natural부터 에티오피아, 페루, 브라질의 수세 싱글 오리진과 하우스 에스프레소 블렌드까지 준비되어 있습니다."
+        },
+        "ja": {
+          "question": "Epicはどんなコーヒーを専門としていますか？",
+          "answer": "ベトナム産ロブスタとシングルオリジンのアラビカです。毎日のRobusta Naturalから、エチオピア、ペルー、ブラジルのウォッシュドシングルオリジン、ハウスエスプレッソブレンドまで揃えています。"
+        }
+      }
+    },
+    {
+      "key": "home-5",
+      "group": "home",
+      "position": 5,
+      "translations": {
+        "vi": {
+          "question": "Cà phê có được rang mới theo đơn không?",
+          "answer": "Có. Cà phê được rang tại xưởng ở Sài Gòn, để nghỉ rồi đóng gói theo đơn và gửi đi trong cùng tuần rang. Có cả lựa chọn nguyên hạt và xay sẵn."
+        },
+        "en": {
+          "question": "Is the coffee roasted fresh to order?",
+          "answer": "Yes. Coffee is roasted in-house at our Sài Gòn roastery, rested, then packed to order and shipped the same week it is roasted. Whole-bean and ground options are both available."
+        },
+        "ru": {
+          "question": "Кофе обжаривается свежим на заказ?",
+          "answer": "Да. Кофе обжаривается у нас в цехе в Сайгоне, отдыхает, затем упаковывается на заказ и отправляется в ту же неделю, когда обжарен. Доступны варианты зерном и молотым."
+        },
+        "hi": {
+          "question": "क्या कॉफ़ी ताज़ा ऑर्डर पर भुनी जाती है?",
+          "answer": "हाँ। कॉफ़ी हमारी साइगॉन रोस्ट्री में घर पर भुनी जाती है, आराम दी जाती है, फिर ऑर्डर पर पैक कर जिस हफ़्ते भुनी गई उसी हफ़्ते भेज दी जाती है। साबुत बीन्स और पिसी दोनों विकल्प उपलब्ध हैं।"
+        },
+        "zh": {
+          "question": "咖啡是新鲜按单烘焙的吗？",
+          "answer": "是的。咖啡在我们的西贡烘焙坊自有烘焙、静置，然后按单包装，并在烘焙的同一周发出。提供整豆与研磨两种选择。"
+        },
+        "ko": {
+          "question": "커피는 신선하게 주문 시 로스팅되나요?",
+          "answer": "네. 커피는 사이공 로스터리에서 직접 로스팅하고 휴지한 뒤 주문에 맞춰 포장되어, 로스팅한 그 주에 발송됩니다. 홀빈과 분쇄 모두 선택할 수 있습니다."
+        },
+        "ja": {
+          "question": "コーヒーは新鮮に注文ごとに焙煎されますか？",
+          "answer": "はい。コーヒーはサイゴンのロースタリーで自社焙煎し、休ませた後、注文に合わせて袋詰めし、焙煎したその週に発送します。ホールビーンと挽き豆の両方をお選びいただけます。"
+        }
+      }
+    },
+    {
+      "key": "coffee-1",
+      "group": "coffee",
+      "position": 1,
+      "translations": {
+        "vi": {
+          "question": "Cà phê của Epic là nguyên hạt hay xay sẵn?",
+          "answer": "Cả hai. Mỗi túi có thể đặt nguyên hạt hoặc xay theo cách pha của bạn — phin, máy espresso, pour over hay cold brew — chọn khi thêm vào giỏ."
+        },
+        "en": {
+          "question": "Is your coffee whole bean or ground?",
+          "answer": "Both. Every bag can be ordered whole bean or ground to suit your brew method — phin filter, espresso machine, pour over or cold brew — selected when you add it to your bag."
+        },
+        "ru": {
+          "question": "Ваш кофе — зерном или молотый?",
+          "answer": "И так, и так. Любой пакет можно заказать зерном или молотым под ваш способ заваривания — фильтр фин, эспрессо-машина, пуровер или колд брю — выбирается при добавлении в корзину."
+        },
+        "hi": {
+          "question": "आपकी कॉफ़ी साबुत बीन्स है या पिसी?",
+          "answer": "दोनों। हर बैग को साबुत या आपकी ब्रू विधि के अनुसार पिसा ऑर्डर किया जा सकता है — फ़िन फ़िल्टर, एस्प्रेसो मशीन, पोर ओवर या कोल्ड ब्रू — बैग में डालते समय चुना जाता है।"
+        },
+        "zh": {
+          "question": "你们的咖啡是整豆还是研磨的？",
+          "answer": "两者都有。每一袋都可选择整豆，或按你的冲煮方式研磨——滴漏滤器、意式咖啡机、手冲或冷萃——在加入购物袋时选择。"
+        },
+        "ko": {
+          "question": "커피는 홀빈인가요, 분쇄인가요?",
+          "answer": "둘 다입니다. 모든 봉지는 홀빈으로, 또는 추출 방식에 맞춰 분쇄해 주문할 수 있습니다 — 핀 필터, 에스프레소 머신, 푸어오버, 콜드브루 — 쇼핑백에 담을 때 선택합니다."
+        },
+        "ja": {
+          "question": "コーヒーはホールビーンですか、挽き豆ですか？",
+          "answer": "どちらも可能です。すべてのバッグはホールビーン、または淹れ方に合わせて挽いた状態でご注文いただけます — フィン用フィルター、エスプレッソマシン、プアオーバー、コールドブリュー — バッグに入れる際にお選びください。"
+        }
+      }
+    },
+    {
+      "key": "coffee-2",
+      "group": "coffee",
+      "position": 2,
+      "translations": {
+        "vi": {
+          "question": "Robusta và arabica của Epic khác nhau thế nào?",
+          "answer": "Robusta Việt Nam đậm, tròn vị, ít chua và nhiều caffeine hơn — nền tảng cho cà phê phin và cà phê sữa đá. Arabica và các dòng single origin nhẹ và ngọt hơn, có độ chua cùng nốt hương trái cây hoặc hoa."
+        },
+        "en": {
+          "question": "What is the difference between your robusta and arabica?",
+          "answer": "Our Vietnamese robusta is bold and full-bodied with low acidity and higher caffeine — the classic base for phin coffee and cà phê sữa đá. Our arabica and single origins are lighter and sweeter, with more acidity and fruit or floral notes."
+        },
+        "ru": {
+          "question": "В чём разница между вашей робустой и арабикой?",
+          "answer": "Наша вьетнамская робуста — насыщенная, полнотелая, с низкой кислотностью и повышенным содержанием кофеина: классическая основа для фина и cà phê sữa đá. Наша арабика и моносорта — легче и слаще, с более выраженной кислотностью и фруктовыми или цветочными нотами."
+        },
+        "hi": {
+          "question": "आपकी रोबस्टा और अरेबिका में क्या अंतर है?",
+          "answer": "हमारी वियतनामी रोबस्टा गाढ़ी और भरपूर बॉडी वाली, कम अम्लीयता और अधिक कैफ़ीन के साथ — फ़िन कॉफ़ी और cà phê sữa đá का क्लासिक आधार। हमारी अरेबिका और सिंगल ओरिजिन हल्की और मीठी, अधिक अम्लीयता तथा फल या फूलों की नोट्स के साथ।"
+        },
+        "zh": {
+          "question": "你们的罗布斯塔和阿拉比卡有什么区别？",
+          "answer": "我们的越南罗布斯塔醇厚饱满、酸度低、咖啡因较高——是滴漏咖啡和 cà phê sữa đá 的经典基底。我们的阿拉比卡与单品更轻盈甘甜，酸度更高，带果香或花香。"
+        },
+        "ko": {
+          "question": "로부스타와 아라비카의 차이는 무엇인가요?",
+          "answer": "우리의 베트남 로부스타는 진하고 바디감이 좋으며 산미가 낮고 카페인이 높습니다 — 핀 커피와 cà phê sữa đá의 클래식한 베이스입니다. 아라비카와 싱글 오리진은 더 가볍고 달콤하며 산미가 높고 과일·꽃 향이 납니다."
+        },
+        "ja": {
+          "question": "ロブスタとアラビカの違いは何ですか？",
+          "answer": "私たちのベトナム産ロブスタは力強くフルボディで、酸味が低くカフェインが多め — フィンコーヒーやcà phê sữa đáの定番のベースです。アラビカとシングルオリジンはより軽く甘く、酸味が豊かで果実や花のニュアンスがあります。"
+        }
+      }
+    },
+    {
+      "key": "coffee-3",
+      "group": "coffee",
+      "position": 3,
+      "translations": {
+        "vi": {
+          "question": "Nên bảo quản cà phê như thế nào?",
+          "answer": "Giữ túi kín, tránh ánh sáng, nhiệt và độ ẩm, ở nhiệt độ phòng — không để trong tủ lạnh. Để giữ hương ngon nhất, dùng trong vòng hai đến bốn tuần kể từ ngày rang in trên túi."
+        },
+        "en": {
+          "question": "How should I store my coffee?",
+          "answer": "Keep the bag sealed, away from light, heat and moisture, at room temperature — not the fridge. For peak flavour, drink it within two to four weeks of the roast date printed on the bag."
+        },
+        "ru": {
+          "question": "Как хранить кофе?",
+          "answer": "Держите пакет закрытым, вдали от света, тепла и влаги, при комнатной температуре — не в холодильнике. Для пика вкуса выпейте его в течение двух–четырёх недель от даты обжарки, указанной на пакете."
+        },
+        "hi": {
+          "question": "कॉफ़ी कैसे स्टोर करें?",
+          "answer": "बैग बंद रखें, रोशनी, गर्मी और नमी से दूर, कमरे के तापमान पर — फ्रिज में नहीं। सर्वोत्तम स्वाद के लिए बैग पर छपी रोस्ट तारीख से दो से चार हफ़्ते के भीतर पिएँ।"
+        },
+        "zh": {
+          "question": "咖啡应该如何保存？",
+          "answer": "保持袋子密封，避光、避热、避潮，置于常温——不要放冰箱。为获得最佳风味，请在袋上烘焙日期后的两到四周内饮用。"
+        },
+        "ko": {
+          "question": "커피는 어떻게 보관해야 하나요?",
+          "answer": "봉지를 밀봉한 채 빛과 열, 습기를 피해 상온에 두세요 — 냉장고는 안 됩니다. 최상의 풍미를 위해 봉지에 인쇄된 로스팅 날짜로부터 2~4주 이내에 드세요."
+        },
+        "ja": {
+          "question": "コーヒーはどう保存すればよいですか？",
+          "answer": "袋を密封し、光・熱・湿気を避けて常温で保管してください — 冷蔵庫は避けてください。最高の風味のため、袋に印字された焙煎日から2〜4週間以内にお飲みください。"
+        }
+      }
+    },
+    {
+      "key": "coffee-4",
+      "group": "coffee",
+      "position": 4,
+      "translations": {
+        "vi": {
+          "question": "Có giao cà phê toàn quốc tại Việt Nam không?",
+          "answer": "Có. Chúng tôi rang theo đơn tại Sài Gòn và giao đi khắp Việt Nam qua ViettelPost. Nội thành TP. HCM thường nhận trong 24 giờ sau khi gửi; các tỉnh khác mất 24 đến 120 giờ."
+        },
+        "en": {
+          "question": "Do you ship coffee nationwide in Việt Nam?",
+          "answer": "Yes. We roast to order in Sài Gòn and ship across Việt Nam with ViettelPost. HCMC inner districts usually receive orders within 24 hours of dispatch; other provinces take 24 to 120 hours."
+        },
+        "ru": {
+          "question": "Вы отправляете кофе по всему Вьетнаму?",
+          "answer": "Да. Мы обжариваем на заказ в Сайгоне и отправляем по всему Вьетнаму через ViettelPost. Внутренние районы Хошимина обычно получают заказы в течение 24 часов после отправки; другие провинции — от 24 до 120 часов."
+        },
+        "hi": {
+          "question": "क्या आप वियतनाम में पूरे देश कॉफ़ी भेजते हैं?",
+          "answer": "हाँ। हम साइगॉन में ऑर्डर पर भूनते हैं और ViettelPost से पूरे वियतनाम में भेजते हैं। HCMC के भीतरी ज़िलों में आमतौर पर डिस्पैच के 24 घंटे के भीतर ऑर्डर मिल जाते हैं; अन्य प्रांतों में 24 से 120 घंटे लगते हैं।"
+        },
+        "zh": {
+          "question": "你们在越南全国配送吗？",
+          "answer": "是的。我们在西贡按单烘焙，并通过 ViettelPost 配送至越南全境。胡志明市内城区通常在发出后 24 小时内收到；其他省份需 24 至 120 小时。"
+        },
+        "ko": {
+          "question": "베트남 전역으로 배송하나요?",
+          "answer": "네. 우리는 사이공에서 주문 시 로스팅해 ViettelPost으로 베트남 전역에 배송합니다. HCMC 도심 지역은 보통 발송 후 24시간 이내 받으며, 다른 성은 24~120시간 걸립니다."
+        },
+        "ja": {
+          "question": "ベトナム全土に発送していますか？",
+          "answer": "はい。サイゴンで注文ごとに焙煎し、ViettelPostでベトナム全土へ発送します。HCMCの中心部は通常発送後24時間以内に到着し、その他の省は24〜120時間かかります。"
+        }
+      }
+    },
+    {
+      "key": "coffee-5",
+      "group": "coffee",
+      "position": 5,
+      "translations": {
+        "vi": {
+          "question": "Tôi có thể mua cà phê sỉ không?",
+          "answer": "Có. Chúng tôi cung cấp cho quán, văn phòng và thương hiệu khắp Việt Nam — nhãn sẵn có hoặc công thức rang riêng, bao bì OEM nhãn riêng, setup quán và đào tạo pha chế. Đơn sỉ tối thiểu từ 5kg mỗi tháng."
+        },
+        "en": {
+          "question": "Can I buy your coffee wholesale?",
+          "answer": "Yes. We supply cafés, offices and brands across Việt Nam — house labels or bespoke roast profiles, private-label OEM packaging, café setup and barista training. Wholesale minimums start at 5kg per month."
+        },
+        "ru": {
+          "question": "Можно купить ваш кофе оптом?",
+          "answer": "Да. Мы поставляем кафе, офисам и брендам по всему Вьетнаму — хаус-линейки или индивидуальные профили обжарки, OEM-упаковка под собственной маркой, открытие кафе и обучение бариста. Оптовый минимум — от 5 кг в месяц."
+        },
+        "hi": {
+          "question": "क्या मैं आपकी कॉफ़ी थोक में खरीद सकता हूँ?",
+          "answer": "हाँ। हम पूरे वियतनाम के कैफ़े, ऑफ़िस और ब्रांडों को आपूर्ति करते हैं — हाउस लेबल या बेस्पोक रोस्ट प्रोफ़ाइल, प्राइवेट-लेबल OEM पैकेजिंग, कैफ़े सेटअप और बरिस्ता प्रशिक्षण। थोक न्यूनतम 5 किलो प्रति माह से शुरू।"
+        },
+        "zh": {
+          "question": "我可以批发购买你们的咖啡吗？",
+          "answer": "可以。我们为越南各地的咖啡馆、办公室和品牌供货——招牌系列或定制烘焙曲线、私标 OEM 包装、咖啡馆整店开业与咖啡师培训。批发起订量为每月 5 公斤。"
+        },
+        "ko": {
+          "question": "커피를 도매로 살 수 있나요?",
+          "answer": "네. 우리는 베트남 전역의 카페, 사무실, 브랜드에 공급합니다 — 하우스 라벨 또는 맞춤 로스팅 프로파일, 자체 브랜드 OEM 포장, 카페 셋업, 바리스타 교육. 도매 최소 주문은 월 5kg부터입니다."
+        },
+        "ja": {
+          "question": "コーヒーを卸売で購入できますか？",
+          "answer": "はい。ベトナム全土のカフェ、オフィス、ブランドに供給しています — ハウスラベルまたは特注の焙煎プロファイル、プライベートラベルOEMパッケージ、カフェ立ち上げ、バリスタ研修。卸売の最小ロットは月5kgからです。"
+        }
+      }
+    },
+    {
+      "key": "visit-1",
+      "group": "visit",
+      "position": 1,
+      "translations": {
+        "vi": {
+          "question": "Quán Epic ở đâu?",
+          "answer": "Quán ở 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, TP. Hồ Chí Minh — một con phố yên tĩnh ở Quận 3, cách trung tâm thành phố một đoạn ngắn."
+        },
+        "en": {
+          "question": "Where is the Epic café?",
+          "answer": "The café is at 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Thành phố Hồ Chí Minh, on the corner of a quiet District 3 street a short ride from the city centre."
+        },
+        "ru": {
+          "question": "Где находится кафе Epic?",
+          "answer": "Кафе — по адресу 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Хошимин, на углу тихой улицы District 3, недалеко от центра города."
+        },
+        "hi": {
+          "question": "Epic कैफ़े कहाँ है?",
+          "answer": "कैफ़े 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, हो ची मिन्ह शहर में, District 3 की एक शांत सड़क के कोने पर, शहर के केंद्र से थोड़ी दूरी पर है।"
+        },
+        "zh": {
+          "question": "Epic 咖啡馆在哪里？",
+          "answer": "咖啡馆位于 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, 胡志明市，位于 District 3 一条安静街道的街角，距市中心不远。"
+        },
+        "ko": {
+          "question": "Epic 카페는 어디에 있나요?",
+          "answer": "카페는 호찌민시 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3에 있으며, District 3의 조용한 거리 모퉁이에 있어 도심에서 가깝습니다."
+        },
+        "ja": {
+          "question": "Epicカフェはどこにありますか？",
+          "answer": "カフェはホーチミン市49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3にあり、District 3の静かな通りの角、市内中心部からすぐです。"
+        }
+      }
+    },
+    {
+      "key": "visit-2",
+      "group": "visit",
+      "position": 2,
+      "translations": {
+        "vi": {
+          "question": "Giờ mở cửa của quán thế nào?",
+          "answer": "Epic mở cửa hằng ngày từ 7:00 đến 22:30, kể cả cuối tuần. Vào ngày lễ, quán mở muộn hơn một chút, từ 8:00 đến 22:00."
+        },
+        "en": {
+          "question": "What are the opening hours?",
+          "answer": "Epic is open every day from 7:00 to 22:30, including weekends. On public holidays the café opens slightly later, from 8:00 to 22:00."
+        },
+        "ru": {
+          "question": "Какой у вас график работы?",
+          "answer": "Epic открыт ежедневно с 7:00 до 22:30, включая выходные. В праздничные дни кафе открывается чуть позже — с 8:00 до 22:00."
+        },
+        "hi": {
+          "question": "खुलने का समय क्या है?",
+          "answer": "Epic रोज़ 7:00 से 22:30 तक खुला है, सप्ताहांत सहित। सार्वजनिक अवकाश पर कैफ़े थोड़ा बाद में खुलता है — 8:00 से 22:00 तक।"
+        },
+        "zh": {
+          "question": "营业时间是？",
+          "answer": "Epic 每天 7:00 至 22:30 营业，含周末。法定假日咖啡馆稍晚开门，8:00 至 22:00。"
+        },
+        "ko": {
+          "question": "영업시간은 어떻게 되나요?",
+          "answer": "Epic은 주말을 포함해 매일 7:00–22:30 영업합니다. 공휴일에는 카페가 조금 늦게, 8:00–22:00에 엽니다."
+        },
+        "ja": {
+          "question": "営業時間は？",
+          "answer": "Epicは週末を含め毎日7:00から22:30まで営業しています。祝日はカフェが少し遅く、8:00から22:00まで営業します。"
+        }
+      }
+    },
+    {
+      "key": "visit-3",
+      "group": "visit",
+      "position": 3,
+      "translations": {
+        "vi": {
+          "question": "Tôi có thể mua cà phê hạt tại quán không?",
+          "answer": "Có. Bạn có thể mua cà phê bán lẻ của EPIC tại quán, nguyên hạt hoặc xay sẵn; đội ngũ sẽ giúp bạn chọn cà phê hoặc cách pha phù hợp khẩu vị."
+        },
+        "en": {
+          "question": "Can I buy coffee beans at the café?",
+          "answer": "Yes. You can buy our retail coffees at the café, whole bean or ground, and the team can help you pick a coffee or brew method for your taste."
+        },
+        "ru": {
+          "question": "Можно купить кофейные зёрна в кафе?",
+          "answer": "Да. В кафе можно купить кофе из нашего ассортимента зерном или молотым, а команда поможет подобрать кофе и способ заваривания под ваш вкус."
+        },
+        "hi": {
+          "question": "क्या मैं कैफ़े में कॉफ़ी बीन्स खरीद सकता हूँ?",
+          "answer": "हाँ। कैफ़े में हमारी कॉफ़ी साबुत या पिसी हुई खरीद सकते हैं। टीम आपके स्वाद के लिए कॉफ़ी या ब्रू विधि चुनने में मदद करेगी।"
+        },
+        "zh": {
+          "question": "可以在咖啡馆买咖啡豆吗？",
+          "answer": "可以。你可以在咖啡馆购买我们的咖啡，选择整豆或研磨；团队也能帮你按口味挑选咖啡或冲煮方式。"
+        },
+        "ko": {
+          "question": "카페에서 원두를 살 수 있나요?",
+          "answer": "네. 카페에서 원두 또는 분쇄 커피를 구매할 수 있으며, 팀이 취향에 맞는 커피와 추출 방식을 추천해 드립니다."
+        },
+        "ja": {
+          "question": "カフェでコーヒー豆を買えますか？",
+          "answer": "はい。カフェでは当店のコーヒーをホールビーンまたは挽き豆でお買い求めいただけます。スタッフがお好みのコーヒーや淹れ方をご案内します。"
+        }
+      }
+    },
+    {
+      "key": "visit-4",
+      "group": "visit",
+      "position": 4,
+      "translations": {
+        "vi": {
+          "question": "Quán có phù hợp để làm việc hay học bài không?",
+          "answer": "Có. Quán có quầy tầng dưới để ngắm phố và khu lounge tầng trên với ghế booth, cùng Wi-Fi và nhiều ổ điện — đủ yên tĩnh để làm việc cả ngày."
+        },
+        "en": {
+          "question": "Is the café good for working or studying?",
+          "answer": "Yes. The café has a downstairs bar for people-watching and an upstairs lounge with booth seating, plus Wi-Fi and plenty of outlets — quiet enough to work through the day."
+        },
+        "ru": {
+          "question": "В кафе удобно работать или учиться?",
+          "answer": "Да. В кафе есть бар внизу для наблюдения за людьми и лаунж наверху с кабинками, а также Wi-Fi и много розеток — достаточно тихо, чтобы работать весь день."
+        },
+        "hi": {
+          "question": "क्या कैफ़े काम या पढ़ाई के लिए अच्छा है?",
+          "answer": "हाँ। कैफ़े में नीचे लोगों को देखने के लिए बार और ऊपर बूथ सीटिंग वाला लाउंज है, साथ ही Wi-Fi और ढेर सारे प्लग — दिन भर काम करने के लिए काफ़ी शांत।"
+        },
+        "zh": {
+          "question": "这里适合工作或学习吗？",
+          "answer": "适合。咖啡馆楼下有吧台可看人来人往，楼上有带卡座的休息区，还有 Wi-Fi 和充足插座——安静得足以工作一整天。"
+        },
+        "ko": {
+          "question": "작업이나 공부하기 좋은가요?",
+          "answer": "네. 아래층에는 사람들을 보기 좋은 바가, 위층에는 부스 좌석이 있는 라운지가 있으며, Wi-Fi와 넉넉한 콘센트가 있어 하루 종일 작업하기 좋습니다."
+        },
+        "ja": {
+          "question": "仕事や勉強に適していますか？",
+          "answer": "はい。カフェには1階に人眺めのバー、2階にボックス席のあるラウンジがあり、Wi-Fiと豊富なコンセントも備えています — 一日中作業できる静けさです。"
+        }
+      }
+    },
+    {
+      "key": "visit-5",
+      "group": "visit",
+      "position": 5,
+      "translations": {
+        "vi": {
+          "question": "Quán có chỗ đậu xe không?",
+          "answer": "Quán nằm trên đường Ngô Thời Nhiệm, Quận 3, có chỗ đậu xe máy dọc đường gần đó. Để đi nhanh nhất, hãy dùng liên kết chỉ đường Google Maps trên trang này."
+        },
+        "en": {
+          "question": "Is there parking at the café?",
+          "answer": "The café is on Ngô Thời Nhiệm in Quận 3 with street parking for motorbikes nearby. For the fastest route, use the Google Maps directions link on this page."
+        },
+        "ru": {
+          "question": "Есть ли парковка у кафе?",
+          "answer": "Кафе находится на Ngô Thời Nhiệm в Quận 3, рядом есть уличная парковка для мотоциклов. Самый быстрый маршрут — по ссылке с маршрутом Google Maps на этой странице."
+        },
+        "hi": {
+          "question": "कैफ़े पर पार्किंग है?",
+          "answer": "कैफ़े Quận 3 के Ngô Thời Nhiệm पर है, पास में मोटरबाइक के लिए सड़क किनारे पार्किंग है। सबसे तेज़ रास्ते के लिए इस पेज पर Google Maps दिशा-निर्देश लिंक का उपयोग करें।"
+        },
+        "zh": {
+          "question": "咖啡馆有停车位吗？",
+          "answer": "咖啡馆位于 Quận 3 的 Ngô Thời Nhiệm，附近有摩托车路边停车位。最快路线请使用本页的 Google 地图导航链接。"
+        },
+        "ko": {
+          "question": "카페에 주차 공간이 있나요?",
+          "answer": "카페는 Quận 3의 Ngô Thời Nhiệm에 있으며 근처에 오토바이 노상 주차 공간이 있습니다. 가장 빠른 길은 이 페이지의 Google Maps 길찾기 링크를 이용하세요."
+        },
+        "ja": {
+          "question": "カフェに駐車場はありますか？",
+          "answer": "カフェはQuận 3のNgô Thời Nhiệmにあり、近くにバイク用の路上駐車スペースがあります。最速のルートはこのページのGoogleマップの道順リンクをご利用ください。"
+        }
+      }
+    },
+    {
+      "key": "contact-1",
+      "group": "contact",
+      "position": 1,
+      "translations": {
+        "vi": {
+          "question": "Làm sao để liên hệ Epic Coffee Roaster?",
+          "answer": "Gửi tin nhắn bằng biểu mẫu trên trang này, gọi 0528 390 442, hoặc ghé quán tại 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, TP. Hồ Chí Minh. Chúng tôi thường phản hồi trong vòng một ngày làm việc."
+        },
+        "en": {
+          "question": "How do I contact Epic Coffee Roaster?",
+          "answer": "Send us a message with the form on this page, call 0528 390 442, or visit the café at 49 Ngô Thời Nhiệm, Phường Võ Thị Sáu, Quận 3, Thành phố Hồ Chí Minh. We usually reply within one working day."
+        }
+      }
+    },
+    {
+      "key": "contact-2",
+      "group": "contact",
+      "position": 2,
+      "translations": {
+        "vi": {
+          "question": "Tôi có thể hẹn tư vấn trực tiếp không?",
+          "answer": "Có. Hãy tick ô \"Tôi muốn được tư vấn trực tiếp\" trên biểu mẫu và để lại địa chỉ tại TP. Hồ Chí Minh. Tư vấn trực tiếp chỉ áp dụng tại TP. Hồ Chí Minh; với các tỉnh thành khác, chúng tôi hỗ trợ qua điện thoại, email hoặc Zalo."
+        },
+        "en": {
+          "question": "Can I book a direct consultation?",
+          "answer": "Yes. Tick \"I'd like a direct consultation\" on the form and leave an address in Ho Chi Minh City. Direct, in-person consultations are offered in HCMC only; for other provinces we'll help by phone, email or Zalo."
+        }
+      }
+    },
+    {
+      "key": "contact-3",
+      "group": "contact",
+      "position": 3,
+      "translations": {
+        "vi": {
+          "question": "Epic Coffee Roaster ở đâu?",
+          "answer": "Quán của chúng tôi ở Quận 3, TP. Hồ Chí Minh, và xưởng rang ở 54/8 Ao Đôi, Bình Hưng Hòa, Hồ Chí Minh. Cả hai địa chỉ đều có trên trang này kèm chỉ đường."
+        },
+        "en": {
+          "question": "Where is Epic Coffee Roaster based?",
+          "answer": "Our café is in Quận 3, Ho Chi Minh City, and our roastery is at 54/8 Ao Đôi, Bình Hưng Hòa, Hồ Chí Minh. Both addresses are listed on this page with directions."
+        }
+      }
+    },
+    {
+      "key": "contact-4",
+      "group": "contact",
+      "position": 4,
+      "translations": {
+        "vi": {
+          "question": "Tôi có thể hỏi về bán sỉ hoặc OEM ở đây không?",
+          "answer": "Có. Bạn có thể dùng biểu mẫu này, hoặc để nhận báo giá và chương trình nhãn hàng riêng OEM, hãy vào trang bán sỉ để yêu cầu bộ mẫu và báo giá."
+        },
+        "en": {
+          "question": "Do you take wholesale or OEM enquiries here?",
+          "answer": "Yes. You can use this form, or for pricing and private-label OEM programmes head to the wholesale page and request a sample kit and pricing."
+        }
+      }
+    },
+    {
+      "key": "roastery-1",
+      "group": "roastery",
+      "position": 1,
+      "translations": {
+        "vi": {
+          "question": "Cà phê mới đến mức nào khi giao đi?",
+          "answer": "Mỗi mẻ đều được rang theo đơn, không lấy từ tồn kho. Sau khi rang, chúng tôi ủ nghỉ để xả khí khoảng ba ngày cho cà ổn định và pha ngon hơn, rồi đóng gói và gửi đi — nên cà đến tay bạn chỉ vài ngày sau ngày rang."
+        },
+        "en": {
+          "question": "How fresh is the coffee when it ships?",
+          "answer": "Every batch is roasted to order, not pulled from stock. After roasting we rest the coffee to degas for around three days so it brews consistently, then pack and dispatch — so your coffee arrives within days of the roast date."
+        },
+        "ru": {
+          "question": "Насколько свежий кофе при отправке?",
+          "answer": "Каждую партию обжаривают на заказ, а не берут со склада. После обжарки мы даём кофе отдохнуть для дегазации около трёх дней, чтобы он заваривался стабильно, затем упаковываем и отправляем — так кофе приходит к вам через считаные дни после даты обжарки."
+        },
+        "hi": {
+          "question": "भेजते समय कॉफ़ी कितनी ताज़ा होती है?",
+          "answer": "हर बैच ऑर्डर पर भुना जाता है, स्टॉक से नहीं निकाला जाता। भूनने के बाद हम कॉफ़ी को लगभग तीन दिन डीगैस के लिए आराम देते हैं ताकि यह लगातार अच्छी बने, फिर पैक और डिस्पैच करते हैं — इसलिए आपकी कॉफ़ी रोस्ट तारीख के कुछ दिनों के भीतर पहुँचती है।"
+        },
+        "zh": {
+          "question": "发货时咖啡有多新鲜？",
+          "answer": "每一批都按单烘焙，而不是从库存取出。烘焙后我们让咖啡静置排气约三天，使其冲煮稳定，然后包装并发货——所以咖啡在烘焙日期后几天内就到你手中。"
+        },
+        "ko": {
+          "question": "발송 시 커피는 얼마나 신선한가요?",
+          "answer": "모든 배치는 재고에서 꺼내는 것이 아니라 주문 시 로스팅합니다. 로스팅 후 약 3일간 가스 빼기를 위해 휴지해 일관되게 추출되도록 한 뒤 포장·발송합니다 — 그래서 커피가 로스팅 날짜로부터 며칠 안에 도착합니다."
+        },
+        "ja": {
+          "question": "発送時のコーヒーはどのくらい新鮮ですか？",
+          "answer": "すべてのバッチは在庫から出すのではなく注文ごとに焙煎します。焙煎後は約3日間ガス抜きのために休ませて安定して抽出できるようにし、それから袋詰めして発送します — ですからコーヒーは焙煎日から数日以内に届きます。"
+        }
+      }
+    },
+    {
+      "key": "roastery-2",
+      "group": "roastery",
+      "position": 2,
+      "translations": {
+        "vi": {
+          "question": "Có rang và phối trộn theo công thức riêng của tôi không?",
+          "answer": "Có. Chúng tôi tạo công thức rang và blend riêng theo khẩu vị của bạn — mức rang, tỷ lệ trộn và độ đậm — rồi lặp lại chính xác qua từng đơn để ly cà của quán luôn ổn định."
+        },
+        "en": {
+          "question": "Can you roast and blend to my own recipe?",
+          "answer": "Yes. We profile custom roasts and blends to your taste — roast level, blend ratio and body — then repeat that profile exactly on every reorder, so your house cup stays consistent."
+        },
+        "ru": {
+          "question": "Можете обжарить и смешать по моему рецепту?",
+          "answer": "Да. Мы создаём индивидуальные обжарки и смеси под ваш вкус — степень обжарки, пропорцию смеси и тело — и затем точно повторяем этот профиль при каждом повторном заказе, чтобы ваша хаус-чашка оставалась неизменной."
+        },
+        "hi": {
+          "question": "क्या आप मेरी खुद की रेसिपी पर भून और ब्लेंड कर सकते हैं?",
+          "answer": "हाँ। हम आपके स्वाद के अनुसार कस्टम रोस्ट और ब्लेंड प्रोफ़ाइल बनाते हैं — रोस्ट लेवल, ब्लेंड अनुपात और बॉडी — फिर हर रीऑर्डर पर उसी प्रोफ़ाइल को बिल्कुल दोहराते हैं, ताकि आपका हाउस कप एक जैसा रहे।"
+        },
+        "zh": {
+          "question": "可以按我自己的配方烘焙和拼配吗？",
+          "answer": "可以。我们按你的口味建立定制烘焙与拼配曲线——烘焙度、拼配比例与醇厚度——然后在每次复购时精确复刻该曲线，让你的招牌风味始终如一。"
+        },
+        "ko": {
+          "question": "제 레시피로 로스팅하고 블렌딩할 수 있나요?",
+          "answer": "네. 취향에 맞춰 맞춤 로스팅과 블렌드를 만듭니다 — 로스팅 정도, 블렌드 비율, 바디 — 그런 다음 재주문마다 그 프로파일을 정확히 반복해 당신의 하우스 컵이 일정하게 유지됩니다."
+        },
+        "ja": {
+          "question": "自分のレシピで焙煎・ブレンドできますか？",
+          "answer": "はい。お好みに合わせてカスタム焙煎とブレンドを組みます — 焙煎度、ブレンド比率、ボディ — そして再注文ごとにそのプロファイルを正確に再現し、ハウスカップが安定するようにします。"
+        }
+      }
+    },
+    {
+      "key": "roastery-3",
+      "group": "roastery",
+      "position": 3,
+      "translations": {
+        "vi": {
+          "question": "Có đóng gói nhãn riêng dưới thương hiệu của tôi không?",
+          "answer": "Có. Chúng tôi đóng gói dưới nhãn của bạn, từ lô nhỏ đến sản lượng bán lẻ, và hỗ trợ thiết kế tem nhãn nếu bạn chưa có. Chúng tôi cũng lưu giữ và quản lý tem nhãn giữa các lần rang để đặt lại dễ dàng."
+        },
+        "en": {
+          "question": "Do you offer private-label packing under my brand?",
+          "answer": "Yes. We pack under your own label, from small runs to retail volume, and can help design the label if you don't have one. We also store and manage your labels between roasts so reorders are simple."
+        },
+        "ru": {
+          "question": "Делаете упаковку под собственной маркой?",
+          "answer": "Да. Мы упаковываем под вашей маркой, от малых партий до розничных объёмов, и можем помочь с дизайном этикетки, если её нет. Мы также храним и управляем вашими этикетками между обжарками, чтобы повторные заказы были простыми."
+        },
+        "hi": {
+          "question": "क्या आप मेरे ब्रांड के तहत प्राइवेट-लेबल पैकिंग करते हैं?",
+          "answer": "हाँ। हम आपके अपने लेबल पर पैक करते हैं, छोटे बैच से रिटेल वॉल्यूम तक, और अगर लेबल न हो तो डिज़ाइन में मदद कर सकते हैं। हम रोस्ट के बीच आपके लेबल भी संग्रहीत और प्रबंधित करते हैं ताकि रीऑर्डर आसान हों।"
+        },
+        "zh": {
+          "question": "你们提供以我品牌名义的私标包装吗？",
+          "answer": "提供。我们以你的品牌包装，从小批量到零售量，若你还没有标签，可协助设计。我们也会在各次烘焙之间为你存放和管理标签，让复购更简单。"
+        },
+        "ko": {
+          "question": "제 브랜드로 자체 브랜드 포장을 하나요?",
+          "answer": "네. 소량부터 리테일 볼륨까지 당신의 라벨로 포장하며, 라벨이 없으면 디자인을 도와드립니다. 또한 로스팅 사이에 라벨을 보관·관리해 재주문이 간편합니다."
+        },
+        "ja": {
+          "question": "自分のブランドでプライベートラベル袋詰めをしてもらえますか？",
+          "answer": "はい。小ロットからリテール量までお客様のラベルで袋詰めし、ラベルがない場合はデザインもお手伝いします。また焙煎の合間にお客様のラベルを保管・管理し、再注文を簡単にします。"
+        }
+      }
+    },
+    {
+      "key": "roastery-4",
+      "group": "roastery",
+      "position": 4,
+      "translations": {
+        "vi": {
+          "question": "Tôi có thể nếm thử trước khi đặt hàng không?",
+          "answer": "Có. Chúng tôi tổ chức buổi cupping miễn phí tại xưởng để bạn nếm nhiều dòng và chọn theo hương vị. Với quán ở xa, chúng tôi gửi bộ mẫu thay thế."
+        },
+        "en": {
+          "question": "Can I taste the coffee before I order?",
+          "answer": "Yes. We run free cupping sessions at the roastery where you can taste across the range and pick your profile by flavour. For cafés further away we'll send a sample kit instead."
+        },
+        "ru": {
+          "question": "Можно попробовать кофе до заказа?",
+          "answer": "Да. Мы проводим бесплатные каппинги в цехе, где можно попробовать весь ассортимент и выбрать профиль по вкусу. Для кафе, которые далеко, мы отправим набор образцов."
+        },
+        "hi": {
+          "question": "क्या मैं ऑर्डर से पहले कॉफ़ी चख सकता हूँ?",
+          "answer": "हाँ। हम रोस्ट्री में मुफ़्त कपिंग सेशन चलाते हैं जहाँ आप पूरी रेंज चखकर स्वाद के आधार पर अपनी प्रोफ़ाइल चुन सकते हैं। दूर के कैफ़ों के लिए हम सैंपल किट भेजेंगे।"
+        },
+        "zh": {
+          "question": "下单前可以先尝吗？",
+          "answer": "可以。我们在烘焙坊举办免费杯测，你可以尝遍整个系列，按风味挑选你的曲线。对于较远的咖啡馆，我们会改寄样品盒。"
+        },
+        "ko": {
+          "question": "주문 전에 맛볼 수 있나요?",
+          "answer": "네. 로스터리에서 무료 컵핑 세션을 운영하며, 전체 라인업을 맛보고 맛으로 프로파일을 고를 수 있습니다. 먼 카페에는 샘플 키트를 보내드립니다."
+        },
+        "ja": {
+          "question": "注文前に味わえますか？",
+          "answer": "はい。ロースタリーで無料カッピングを開催しており、全ラインナップを味わって風味でプロファイルを選べます。遠方のカフェにはサンプルキットをお送りします。"
+        }
+      }
+    },
+    {
+      "key": "roastery-5",
+      "group": "roastery",
+      "position": 5,
+      "translations": {
+        "vi": {
+          "question": "Có cung cấp và bảo dưỡng máy cà phê không?",
+          "answer": "Có. Chúng tôi cung cấp, cho thuê và thu mua máy espresso, đồng thời canh chỉnh máy xay và máy pha khớp với hương vị bạn đã nếm tại xưởng. Máy hết bảo hành được bảo dưỡng với giá ưu đãi cho khách hàng chúng tôi cung cấp."
+        },
+        "en": {
+          "question": "Do you supply and service coffee machines?",
+          "answer": "Yes. We supply, rent and buy back espresso machines, and we dial in grinders and brewers to match the profile you tasted at the roastery. Out-of-warranty equipment is serviced at preferential rates for customers we supply."
+        },
+        "ru": {
+          "question": "Вы поставляете и обслуживаете кофемашины?",
+          "answer": "Да. Мы поставляем, сдаём в аренду и выкупаем эспрессо-машины, настраиваем кофемолки и брюеры под профиль, который вы попробовали в цехе. Оборудование вне гарантии обслуживается по льготным тарифам для клиентов, которым мы поставляем."
+        },
+        "hi": {
+          "question": "क्या आप कॉफ़ी मशीनें आपूर्ति और सर्विस करते हैं?",
+          "answer": "हाँ। हम एस्प्रेसो मशीनें आपूर्ति, किराये और बाय-बैक करते हैं, और ग्राइंडर व ब्रूअर को उस प्रोफ़ाइल पर डायल करते हैं जो आपने रोस्ट्री में चखी। वारंटी-रहित उपकरण जिन ग्राहकों को हम आपूर्ति करते हैं उनके लिए तरजीही दरों पर सर्विस किए जाते हैं।"
+        },
+        "zh": {
+          "question": "你们供应和维修咖啡机吗？",
+          "answer": "是的。我们供应、出租并回收意式咖啡机，并把磨豆机与冲煮设备校准到你在烘焙坊尝过的曲线。由我们供应的客户，其过保设备以优惠费率维修。"
+        },
+        "ko": {
+          "question": "커피 머신을 공급하고 서비스하나요?",
+          "answer": "네. 에스프레소 머신을 공급·임대·매입하고, 로스터리에서 맛본 프로파일에 맞춰 그라인더와 브루어를 다이얼인합니다. 보증이 끝난 장비는 우리가 공급한 고객에게 우대 요율로 서비스합니다."
+        },
+        "ja": {
+          "question": "コーヒーマシンの供給とサービスを行っていますか？",
+          "answer": "はい。エスプレッソマシンの供給・レンタル・買い取りを行い、ロースタリーで味わったプロファイルに合わせてグラインダーとブリュワーをダイヤルインします。保証切れの器具は、私たちが供給するお客様に優遇料金でサービスします。"
+        }
+      }
+    },
+    {
+      "key": "roastery-6",
+      "group": "roastery",
+      "position": 6,
+      "translations": {
+        "vi": {
+          "question": "Làm sao để nhận mẫu cà phê miễn phí và có thể chọn gì?",
+          "answer": "Dùng biểu mẫu nhận mẫu miễn phí trên trang xưởng rang. Cung cấp họ tên, số điện thoại (10 chữ số, bắt đầu bằng 0) và địa chỉ nhận hàng — tỉnh/thành, phường/xã và đường; email không bắt buộc. Chọn khẩu vị: Robusta Natural, Robusta Honey hoặc Arabica Việt Nam. Bạn cũng có thể chọn cách pha (tùy chọn): Pha Phin, Espresso, Cold Brew hoặc Pour Over. Mỗi hộ gia đình nhận một mẫu miễn phí trên khắp Việt Nam."
+        },
+        "en": {
+          "question": "How do I request a free coffee sample, and what can I choose?",
+          "answer": "Use the free-sample form on the roastery page. Provide your full name, phone number (10 digits starting with 0) and delivery address — province/city, ward/commune and street; email is optional. Choose a taste: Robusta Natural, Robusta Honey or Arabica Việt Nam. You can also choose a brew style (optional): Pha Phin, Espresso, Cold Brew or Pour Over. We ship one free sample per household anywhere in Việt Nam."
+        },
+        "ru": {
+          "question": "Как запросить бесплатный образец кофе и что можно выбрать?",
+          "answer": "Используйте форму бесплатного образца на странице обжарочного цеха. Укажите полное имя, номер телефона (10 цифр, начиная с 0) и адрес доставки — провинция/город, коммуна и улица; email необязателен. Выберите вкус: Robusta Natural, Robusta Honey или арабика Вьетнам. Также можно выбрать способ заваривания (необязательно): пха фин, эспрессо, колд брю или пуровер. Мы отправляем один бесплатный образец на домохозяйство в любом месте Вьетнама."
+        },
+        "hi": {
+          "question": "मुफ़्त कॉफ़ी सैंपल कैसे माँगें और क्या चुन सकते हैं?",
+          "answer": "रोस्ट्री पेज पर मुफ़्त सैंपल फ़ॉर्म का उपयोग करें। अपना पूरा नाम, फ़ोन नंबर (0 से शुरू होने वाले 10 अंक) और डिलीवरी पता दें — प्रांत/शहर, वार्ड/कम्यून और सड़क; ईमेल वैकल्पिक है। स्वाद चुनें: Robusta Natural, Robusta Honey या अरेबिका वियतनाम। आप ब्रू स्टाइल (वैकल्पिक) भी चुन सकते हैं: फा फ़िन, एस्प्रेसो, कोल्ड ब्रू या पोर ओवर। हम वियतनाम में कहीं भी प्रति घर एक मुफ़्त सैंपल भेजते हैं।"
+        },
+        "zh": {
+          "question": "如何申请免费咖啡样品，可以选择什么？",
+          "answer": "使用烘焙坊页面上的免费样品表单。提供全名、电话（以 0 开头的 10 位数字）和收件地址——省/市、坊/社和街道；邮箱可选。选择口味：Robusta Natural、Robusta Honey 或越南阿拉比卡。你还可选择冲煮方式（可选）：滴漏、意式浓缩、冷萃或手冲。我们为越南全境每户寄送一份免费样品。"
+        },
+        "ko": {
+          "question": "무료 커피 샘플은 어떻게 신청하고 무엇을 고를 수 있나요?",
+          "answer": "로스터리 페이지의 무료 샘플 양식을 이용하세요. 성함, 전화번호(0으로 시작하는 10자리), 배송 주소 — 성/시, 동/사, 거리 — 를 제공하세요. 이메일은 선택입니다. 맛을 고르세요: Robusta Natural, Robusta Honey 또는 베트남 아라비카. 추출 방식(선택)도 고를 수 있습니다: 핀 추출, 에스프레소, 콜드브루 또는 푸어오버. 베트남 어디든 가구당 무료 샘플 하나를 보내드립니다."
+        },
+        "ja": {
+          "question": "無料サンプルの申し込み方法と選べる内容は？",
+          "answer": "ロースタリーページの無料サンプルフォームをご利用ください。氏名、電話番号（0で始まる10桁）、配送先住所 — 省/市、街区/コミューン、通り — をご記入ください。メールは任意です。味を選んでください：Robusta Natural、Robusta Honey、ベトナム産アラビカ。淹れ方（任意）も選べます：フィン抽出、エスプレッソ、コールドブリュー、プアオーバー。ベトナム全土で1世帯につき無料サンプル1点をお送りします。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-1",
+      "group": "wholesale",
+      "position": 1,
+      "translations": {
+        "vi": {
+          "question": "Đơn sỉ cà phê tối thiểu là bao nhiêu?",
+          "answer": "Đơn sỉ tối thiểu từ 5kg mỗi tháng, và chúng tôi rang theo mẻ linh hoạt từ 1kg đến 30kg và hơn. Đơn lớn hoặc nhiều loại có thể gom lại để được giá tốt hơn trên mỗi kg, và miễn phí giao hàng cho đơn định kỳ hằng tháng."
+        },
+        "en": {
+          "question": "What is the minimum order for wholesale coffee?",
+          "answer": "Wholesale minimums start at 5kg per month, and we roast in flexible batch sizes from 1kg to 30kg and beyond. Larger or mixed orders can be consolidated so you get the best price per kilo, and free delivery applies on standing monthly orders."
+        },
+        "ru": {
+          "question": "Каков минимальный заказ для оптового кофе?",
+          "answer": "Оптовый минимум — от 5 кг в месяц, и мы обжариваем гибкими партиями от 1 кг до 30 кг и более. Более крупные или смешанные заказы можно объединить, чтобы получить лучшую цену за килограмм; бесплатная доставка действует на постоянные ежемесячные заказы."
+        },
+        "hi": {
+          "question": "थोक कॉफ़ी के लिए न्यूनतम ऑर्डर क्या है?",
+          "answer": "थोक न्यूनतम 5 किलो प्रति माह से शुरू होता है, और हम 1 किलो से 30 किलो और उससे अधिक तक लचीले बैच आकार में भूनते हैं। बड़े या मिश्रित ऑर्डर समेकित किए जा सकते हैं ताकि आपको प्रति किलो सर्वोत्तम मूल्य मिले, और स्थायी मासिक ऑर्डर पर मुफ़्त डिलीवरी लागू होती है।"
+        },
+        "zh": {
+          "question": "批发咖啡的最低订量是多少？",
+          "answer": "批发起订量为每月 5 公斤，我们以 1 公斤至 30 公斤及以上的灵活批量烘焙。较大或混合订单可以合并，以获得每公斤最优价格，长期月度订单免运费。"
+        },
+        "ko": {
+          "question": "도매 커피 최소 주문량은 얼마인가요?",
+          "answer": "도매 최소 주문은 월 5kg부터이며, 1kg에서 30kg 이상까지 유연한 배치 크기로 로스팅합니다. 더 크거나 혼합된 주문은 통합해 kg당 최적 가격을 받을 수 있고, 정기 월 주문에는 무료 배송이 적용됩니다."
+        },
+        "ja": {
+          "question": "卸売コーヒーの最小注文量は？",
+          "answer": "卸売の最小ロットは月5kgからで、1kgから30kg以上まで柔軟なバッチサイズで焙煎します。より大きな、または混在した注文はまとめて1kgあたりの最良価格を得られます。定期月次注文は送料無料です。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-2",
+      "group": "wholesale",
+      "position": 2,
+      "translations": {
+        "vi": {
+          "question": "Có tạo công thức rang hoặc blend riêng cho quán tôi không?",
+          "answer": "Có. Chúng tôi xây công thức rang và blend riêng quanh menu của bạn — mức rang, tỷ lệ trộn và độ đậm theo công thức của bạn — rồi lặp lại chính xác qua từng đơn để hương vị không đổi."
+        },
+        "en": {
+          "question": "Can you create a custom roast or house blend for my café?",
+          "answer": "Yes. We build custom roasts and house blends around your menu — roast level, mix ratio and body to your recipe — then repeat the exact profile on every order so the cup never drifts."
+        },
+        "ru": {
+          "question": "Можете создать индивидуальную обжарку или хаус-смесь для моего кафе?",
+          "answer": "Да. Мы создаём индивидуальные обжарки и хаус-смеси под ваше меню — степень обжарки, пропорцию смеси и тело по вашему рецепту — и затем повторяем точный профиль в каждом заказе, чтобы чашка не менялась."
+        },
+        "hi": {
+          "question": "क्या आप मेरे कैफ़े के लिए कस्टम रोस्ट या हाउस ब्लेंड बना सकते हैं?",
+          "answer": "हाँ। हम आपके मेन्यू के इर्द-गिर्द कस्टम रोस्ट और हाउस ब्लेंड बनाते हैं — आपकी रेसिपी के अनुसार रोस्ट लेवल, मिश्रण अनुपात और बॉडी — फिर हर ऑर्डर पर वही प्रोफ़ाइल दोहराते हैं ताकि कप कभी न बदले।"
+        },
+        "zh": {
+          "question": "可以为我的咖啡馆定制烘焙或招牌拼配吗？",
+          "answer": "可以。我们围绕你的菜单建立定制烘焙与招牌拼配——按你的配方设定烘焙度、拼配比例与醇厚度——然后在每一单复刻同样的曲线，让杯中风味始终稳定。"
+        },
+        "ko": {
+          "question": "제 카페를 위한 맞춤 로스팅이나 하우스 블렌드를 만들 수 있나요?",
+          "answer": "네. 당신의 메뉴를 중심으로 맞춤 로스팅과 하우스 블렌드를 만듭니다 — 당신의 레시피에 맞춘 로스팅 정도, 배합 비율, 바디 — 그리고 주문마다 정확한 프로파일을 반복해 컵이 흔들리지 않습니다."
+        },
+        "ja": {
+          "question": "自分のカフェ用にカスタム焙煎やハウスブレンドを作れますか？",
+          "answer": "はい。あなたのメニューを中心にカスタム焙煎とハウスブレンドを組みます — あなたのレシピに合わせた焙煎度、配合比率、ボディ — そして毎回の注文で正確なプロファイルを再現し、カップがぶれないようにします。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-3",
+      "group": "wholesale",
+      "position": 3,
+      "translations": {
+        "vi": {
+          "question": "Có nhận gia công nhãn riêng (OEM) không?",
+          "answer": "Có. Chúng tôi cung cấp chương trình OEM nhãn riêng trọn gói — thương hiệu của bạn, xưởng rang và bao bì của chúng tôi — từ đơn nhỏ đến số lượng bán lẻ, với công thức rang khớp menu của bạn. Chúng tôi có thể thiết kế tem nhãn và lưu giữ, quản lý giữa các lần rang."
+        },
+        "en": {
+          "question": "Do you offer private label and OEM coffee packaging?",
+          "answer": "Yes. We offer full private-label OEM coffee programmes — your brand, our roastery and packaging — from small runs to retail volume, with the roast profile matched to your menu. We can design the label and store and manage it between runs."
+        },
+        "ru": {
+          "question": "Предлагаете частную марку и OEM-упаковку кофе?",
+          "answer": "Да. Мы предлагаем полные OEM-программы под собственной маркой — ваш бренд, наш цех и упаковка — от малых партий до розничных объёмов, с профилем обжарки под ваше меню. Мы можем разработать этикетку и хранить и управлять ею между партиями."
+        },
+        "hi": {
+          "question": "क्या आप प्राइवेट लेबल और OEM कॉफ़ी पैकेजिंग देते हैं?",
+          "answer": "हाँ। हम पूर्ण प्राइवेट-लेबल OEM कॉफ़ी कार्यक्रम देते हैं — आपका ब्रांड, हमारी रोस्ट्री और पैकेजिंग — छोटे बैच से रिटेल वॉल्यूम तक, आपके मेन्यू के अनुसार रोस्ट प्रोफ़ाइल के साथ। हम लेबल डिज़ाइन कर सकते हैं और रन के बीच उसे संभाल व प्रबंधित कर सकते हैं।"
+        },
+        "zh": {
+          "question": "你们提供私标和 OEM 咖啡包装吗？",
+          "answer": "提供。我们提供完整的私标 OEM 咖啡项目——你的品牌、我们的烘焙坊与包装——从小批量到零售量，烘焙曲线匹配你的菜单。我们可以设计标签，并在各批次之间为你存放和管理。"
+        },
+        "ko": {
+          "question": "자체 브랜드와 OEM 커피 포장을 제공하나요?",
+          "answer": "네. 완전한 자체 브랜드 OEM 커피 프로그램을 제공합니다 — 당신의 브랜드, 우리의 로스터리와 포장 — 소량부터 리테일 볼륨까지, 메뉴에 맞춘 로스팅 프로파일로. 라벨을 디자인하고 배치 사이에 보관·관리할 수 있습니다."
+        },
+        "ja": {
+          "question": "プライベートラベルとOEMコーヒーパッケージを提供していますか？",
+          "answer": "はい。完全なプライベートラベルOEMコーヒープログラムを提供します — あなたのブランド、私たちのロースタリーとパッケージ — 小ロットからリテール量まで、メニューに合わせた焙煎プロファイルで。ラベルをデザインし、バッチ間に保管・管理することもできます。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-4",
+      "group": "wholesale",
+      "position": 4,
+      "translations": {
+        "vi": {
+          "question": "Có hỗ trợ setup quán và đào tạo pha chế không?",
+          "answer": "Có. Dịch vụ B2B của chúng tôi gồm setup quán trọn gói, tư vấn và bán thiết bị, cân chỉnh máy xay, công thức pha và đào tạo pha chế trực tiếp để đội ngũ tạo ra đúng ly cà."
+        },
+        "en": {
+          "question": "Do you help set up a café and train baristas?",
+          "answer": "Yes. Our B2B services include turnkey café setup, equipment consulting and sales, grinder dial-in, brew recipes and hands-on barista training so your team can reproduce the same cup."
+        },
+        "ru": {
+          "question": "Помогаете открыть кафе и обучить бариста?",
+          "answer": "Да. Наши B2B-услуги включают открытие кафе под ключ, консалтинг и продажу оборудования, настройку кофемолки, рецепты заваривания и практическое обучение бариста, чтобы ваша команда воспроизводила ту же чашку."
+        },
+        "hi": {
+          "question": "क्या आप कैफ़े सेटअप और बरिस्ता प्रशिक्षण में मदद करते हैं?",
+          "answer": "हाँ। हमारी B2B सेवाओं में टर्नकी कैफ़े सेटअप, उपकरण परामर्श और बिक्री, ग्राइंडर डायल-इन, ब्रू रेसिपी और व्यावहारिक बरिस्ता प्रशिक्षण शामिल है ताकि आपकी टीम वही कप दोबारा बना सके।"
+        },
+        "zh": {
+          "question": "你们帮助开咖啡馆并培训咖啡师吗？",
+          "answer": "是的。我们的 B2B 服务包括咖啡馆整店开业、设备咨询与销售、磨豆机校准、冲煮配方，以及实操咖啡师培训，让团队能复刻同一杯。"
+        },
+        "ko": {
+          "question": "카페 오픈과 바리스타 교육을 도와주나요?",
+          "answer": "네. B2B 서비스에는 턴키 카페 셋업, 장비 컨설팅과 판매, 그라인더 다이얼인, 추출 레시피, 실습 바리스타 교육이 포함되어 팀이 같은 컵을 재현할 수 있습니다."
+        },
+        "ja": {
+          "question": "カフェの立ち上げとバリスタ研修を手伝ってもらえますか？",
+          "answer": "はい。B2Bサービスにはカフェのターンキー立ち上げ、器具のコンサルティングと販売、グラインダーのダイヤルイン、抽出レシピ、実践的なバリスタ研修が含まれ、あなたのチームが同じカップを再現できるようにします。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-5",
+      "group": "wholesale",
+      "position": 5,
+      "translations": {
+        "vi": {
+          "question": "Có cung cấp, cho thuê hoặc bảo dưỡng máy cà phê không?",
+          "answer": "Có. Chúng tôi cung cấp, cho thuê và thu mua máy espresso, canh chỉnh máy xay và máy pha theo đúng hương vị bạn đã nếm tại xưởng. Máy do chúng tôi cung cấp, hoặc đã setup cho bạn, được bảo dưỡng với giá ưu đãi khi hết bảo hành."
+        },
+        "en": {
+          "question": "Do you supply, rent or service coffee machines?",
+          "answer": "Yes. We supply, rent and buy back espresso machines, and dial in grinders and brewers to the profile you tasted at the roastery. Machines we supply, or have set up for you, are serviced at preferential rates once out of warranty."
+        },
+        "ru": {
+          "question": "Поставляете, сдаёте в аренду или обслуживаете кофемашины?",
+          "answer": "Да. Мы поставляем, сдаём в аренду и выкупаем эспрессо-машины, настраиваем кофемолки и брюеры под профиль, который вы попробовали в цехе. Машины, которые мы поставили или настроили для вас, обслуживаются по льготным тарифам после окончания гарантии."
+        },
+        "hi": {
+          "question": "क्या आप कॉफ़ी मशीनें आपूर्ति, किराये या सर्विस करते हैं?",
+          "answer": "हाँ। हम एस्प्रेसो मशीनें आपूर्ति, किराये और बाय-बैक करते हैं, और ग्राइंडर व ब्रूअर को उस प्रोफ़ाइल पर डायल करते हैं जो आपने रोस्ट्री में चखी। हमारी आपूर्ति या सेटअप की गई मशीनें वारंटी खत्म होने पर तरजीही दरों पर सर्विस की जाती हैं।"
+        },
+        "zh": {
+          "question": "你们供应、出租或维修咖啡机吗？",
+          "answer": "是的。我们供应、出租并回收意式咖啡机，并把磨豆机与冲煮设备校准到你在烘焙坊尝过的曲线。由我们供应或为你安装的机器，在过保后以优惠费率维修。"
+        },
+        "ko": {
+          "question": "커피 머신을 공급, 임대 또는 서비스하나요?",
+          "answer": "네. 에스프레소 머신을 공급·임대·매입하고, 로스터리에서 맛본 프로파일에 맞춰 그라인더와 브루어를 다이얼인합니다. 우리가 공급하거나 설치한 머신은 보증 만료 후 우대 요율로 서비스합니다."
+        },
+        "ja": {
+          "question": "コーヒーマシンの供給・レンタル・サービスを行っていますか？",
+          "answer": "はい。エスプレッソマシンの供給・レンタル・買い取りを行い、ロースタリーで味わったプロファイルに合わせてグラインダーとブリュワーをダイヤルインします。私たちが供給または設置したマシンは、保証切れ後に優遇料金でサービスします。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-6",
+      "group": "wholesale",
+      "position": 6,
+      "translations": {
+        "vi": {
+          "question": "Cà phê sỉ mới thế nào và được lên lịch ra sao?",
+          "answer": "Cà phê được rang theo đơn thay vì tồn kho, ủ nghỉ để xả khí khoảng ba ngày rồi đóng gói và giao theo lịch phù hợp với quán. Nên đặt trước khi gần hết để mỗi mẻ đến tay bạn lúc ngon nhất."
+        },
+        "en": {
+          "question": "How fresh is wholesale coffee, and how is it scheduled?",
+          "answer": "Coffee is roasted to order rather than held in stock, rested to degas for around three days, then packed and delivered on the schedule that fits your bar. Order ahead of when you run low so each batch arrives at its best."
+        },
+        "ru": {
+          "question": "Насколько свежий оптовый кофе и как он планируется?",
+          "answer": "Кофе обжаривают на заказ, а не держат на складе, дают отдохнуть для дегазации около трёх дней, затем упаковывают и доставляют по графику, подходящему вашему бару. Заказывайте заранее, до того как запасы на исходе, чтобы каждая партия приезжала в лучшем виде."
+        },
+        "hi": {
+          "question": "थोक कॉफ़ी कितनी ताज़ा है और शेड्यूल कैसे होता है?",
+          "answer": "कॉफ़ी स्टॉक में रखने के बजाय ऑर्डर पर भुनी जाती है, लगभग तीन दिन डीगैस के लिए आराम दी जाती है, फिर आपके बार के अनुकूल शेड्यूल पर पैक व डिलीवर की जाती है। जब स्टॉक कम होने लगे उससे पहले ऑर्डर करें ताकि हर बैच अपने सर्वोत्तम रूप में पहुँचे।"
+        },
+        "zh": {
+          "question": "批发咖啡有多新鲜，如何排期？",
+          "answer": "咖啡按单烘焙而非库存存放，静置排气约三天，然后按适合你吧台的排期包装与交付。在你快用完之前提前下单，让每批都以最佳状态送达。"
+        },
+        "ko": {
+          "question": "도매 커피는 얼마나 신선하고 일정은 어떻게 되나요?",
+          "answer": "커피는 재고로 보관하지 않고 주문 시 로스팅하며, 약 3일간 가스 빼기를 위해 휴지한 뒤 당신의 바에 맞는 일정으로 포장·배송합니다. 재고가 떨어지기 전에 미리 주문해 각 배치가 최상의 상태로 도착하도록 하세요."
+        },
+        "ja": {
+          "question": "卸売コーヒーはどのくらい新鮮で、スケジュールは？",
+          "answer": "コーヒーは在庫で保管せず注文ごとに焙煎し、約3日間ガス抜きのために休ませてから、あなたのバーに合うスケジュールで袋詰めし配送します。在庫が少なくなる前に余裕を持ってご注文いただくと、各バッチが最良の状態で届きます。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-7",
+      "group": "wholesale",
+      "position": 7,
+      "translations": {
+        "vi": {
+          "question": "Có xuất hoá đơn VAT và gửi bộ mẫu không?",
+          "answer": "Có. Chúng tôi là xưởng rang hoạt động lâu năm, đầy đủ giấy tờ và có thể xuất hoá đơn VAT cho đơn sỉ. Hãy chia sẻ thông tin quán hoặc thương hiệu, chúng tôi sẽ gửi bộ mẫu, báo giá và phương án hoá đơn."
+        },
+        "en": {
+          "question": "Can I get a VAT invoice and sample kit?",
+          "answer": "Yes. We're a long-established, fully licensed roastery and can issue VAT invoices for wholesale orders. Share your café or brand details and we'll follow up with a sample kit, pricing and invoice options."
+        },
+        "ru": {
+          "question": "Можно получить счёт с НДС и набор образцов?",
+          "answer": "Да. Мы давно работающая, полностью лицензированная обжарочная и можем выставлять счета с НДС на оптовые заказы. Поделитесь данными вашего кафе или бренда, и мы вернёмся с набором образцов, ценами и вариантами счёта."
+        },
+        "hi": {
+          "question": "क्या मुझे VAT इनवॉइस और सैंपल किट मिल सकती है?",
+          "answer": "हाँ। हम एक पुरानी, पूरी तरह लाइसेंस प्राप्त रोस्ट्री हैं और थोक ऑर्डर पर VAT इनवॉइस जारी कर सकते हैं। अपने कैफ़े या ब्रांड का विवरण साझा करें और हम सैंपल किट, मूल्य और इनवॉइस विकल्पों के साथ संपर्क करेंगे।"
+        },
+        "zh": {
+          "question": "可以拿到 VAT 发票和样品盒吗？",
+          "answer": "可以。我们是一家经营多年、证照齐全的烘焙坊，可为批发订单开具 VAT 发票。分享你的咖啡馆或品牌信息，我们会跟进样品盒、报价与发票方案。"
+        },
+        "ko": {
+          "question": "VAT 인보이스와 샘플 키트를 받을 수 있나요?",
+          "answer": "네. 우리는 오래 운영해 온 정식 라이선스 로스터리이며 도매 주문에 VAT 인보이스를 발행할 수 있습니다. 카페나 브랜드 정보를 공유해 주시면 샘플 키트, 가격, 인보이스 옵션으로 연락드립니다."
+        },
+        "ja": {
+          "question": "VAT請求書とサンプルキットをもらえますか？",
+          "answer": "はい。当社は長年営業する正式ライセンスのロースタリーで、卸売注文にVAT請求書を発行できます。カフェやブランドの情報をお知らせいただければ、サンプルキット、価格、請求書の選択肢をご案内します。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-8",
+      "group": "wholesale",
+      "position": 8,
+      "translations": {
+        "vi": {
+          "question": "Cung cấp ở những khu vực nào?",
+          "answer": "Chúng tôi rang và giao cho đối tác khắp Việt Nam, từ quán đơn lẻ đến chuỗi nhiều chi nhánh và văn phòng, giao hàng tươi theo lịch phù hợp với quầy của bạn."
+        },
+        "en": {
+          "question": "What areas do you supply?",
+          "answer": "We roast and deliver for partners across Việt Nam, from single-café accounts to multi-site brands and offices, shipped fresh on a schedule that fits your bar."
+        },
+        "ru": {
+          "question": "В какие регионы вы поставляете?",
+          "answer": "Мы обжариваем и доставляем для партнёров по всему Вьетнаму — от одного кафе до мультилокационных брендов и офисов, свежими по графику, подходящему вашему бару."
+        },
+        "hi": {
+          "question": "आप किन क्षेत्रों में आपूर्ति करते हैं?",
+          "answer": "हम पूरे वियतनाम के साझेदारों के लिए भूनते और डिलीवर करते हैं — एक कैफ़े के खाते से लेकर बहु-स्थान ब्रांड और ऑफ़िस तक, आपके बार के अनुकूल शेड्यूल पर ताज़ा भेजा गया।"
+        },
+        "zh": {
+          "question": "你们供应哪些地区？",
+          "answer": "我们为越南各地的合作伙伴烘焙与配送——从单店咖啡馆到多店品牌与办公室，按适合你吧台的排期新鲜发货。"
+        },
+        "ko": {
+          "question": "어느 지역에 공급하나요?",
+          "answer": "우리는 베트남 전역의 파트너를 위해 로스팅하고 배송합니다 — 단일 카페 거래부터 다지점 브랜드와 사무실까지, 당신의 바에 맞는 일정으로 신선하게 발송합니다."
+        },
+        "ja": {
+          "question": "どの地域に供給していますか？",
+          "answer": "ベトナム全土のパートナーのために焙煎し配送しています — 単店のカフェから複数店舗のブランドやオフィスまで、あなたのバーに合うスケジュールで新鮮にお届けします。"
+        }
+      }
+    },
+    {
+      "key": "wholesale-9",
+      "group": "wholesale",
+      "position": 9,
+      "translations": {
+        "vi": {
+          "question": "Làm sao để nhận báo giá và mẫu sỉ?",
+          "answer": "Điền vào biểu mẫu bán sỉ trên trang này với tên doanh nghiệp và thông tin liên hệ, hoặc gọi xưởng rang số 0528 390 442. Chúng tôi sẽ phản hồi kèm bộ mẫu và báo giá."
+        },
+        "en": {
+          "question": "How do I get wholesale pricing and samples?",
+          "answer": "Fill in the wholesale form on this page with your business name and contact details, or call the roastery on 0528 390 442. We'll follow up with a sample kit and pricing."
+        },
+        "ru": {
+          "question": "Как получить оптовые цены и образцы?",
+          "answer": "Заполните оптовую форму на этой странице с названием компании и контактными данными или позвоните в цех по номеру 0528 390 442. Мы вернёмся с набором образцов и ценами."
+        },
+        "hi": {
+          "question": "थोक मूल्य और सैंपल कैसे प्राप्त करें?",
+          "answer": "इस पेज पर थोक फ़ॉर्म में अपने व्यवसाय का नाम और संपर्क विवरण भरें, या रोस्ट्री को 0528 390 442 पर कॉल करें। हम सैंपल किट और मूल्य के साथ संपर्क करेंगे।"
+        },
+        "zh": {
+          "question": "如何获取批发报价和样品？",
+          "answer": "在本页的批发表单中填写你的公司名称与联系方式，或致电烘焙坊 0528 390 442。我们会跟进样品盒与报价。"
+        },
+        "ko": {
+          "question": "도매 가격과 샘플은 어떻게 받나요?",
+          "answer": "이 페이지의 도매 양식에 사업체명과 연락처를 작성하거나 로스터리 0528 390 442로 전화하세요. 샘플 키트와 가격으로 연락드립니다."
+        },
+        "ja": {
+          "question": "卸売価格とサンプルはどう入手しますか？",
+          "answer": "このページの卸売フォームに会社名と連絡先をご記入いただくか、ロースタリー（0528 390 442）までお電話ください。サンプルキットと価格をご連絡します。"
+        }
+      }
+    }
+  ]
+}

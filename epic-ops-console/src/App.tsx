@@ -6,12 +6,14 @@ import { Overview } from "@/components/overview";
 import { RecordsPage } from "@/components/records-page";
 import { RecordsHub, SettingsPage } from "@/components/hub-pages";
 import { SupportConversations } from "@/components/support-conversations";
+import { FaqManager } from "@/components/faq-manager";
 import { modules } from "@/lib/modules";
 import { Link, usePathname } from "@/lib/router";
 
 function resolveRoute(pathname: string) {
   if (pathname === "/" || pathname === "") return <Overview />;
   if (pathname === "/support/conversations" || pathname.startsWith("/support/conversations/")) return <SupportConversations />;
+  if (pathname === "/faqs") return <FaqManager />;
   const definition = modules.find((item) => item.href === pathname);
   if (!definition) return <NotFound pathname={pathname} />;
   if (definition.id === "finance" || definition.id === "marketing") return <RecordsHub module={definition.id} title={definition.label} />;
