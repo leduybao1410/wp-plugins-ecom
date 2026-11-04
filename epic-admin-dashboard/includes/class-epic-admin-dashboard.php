@@ -2096,7 +2096,10 @@ final class Epic_Admin_Dashboard {
 				}
 				if ( array_key_exists( 'note', $body ) ) {
 					if ( ! is_string( $body['note'] ) || strlen( $body['note'] ) > 4000 ) { return self::error( 'invalid_note', 'Order notes must be text under 4,000 characters.' ); }
-					if ( trim( $body['note'] ) ) { $order->add_order_note( sanitize_textarea_field( $body['note'] ) ); $fields[] = 'note'; }
+					// WooCommerce 11 signature: add_order_note( $note, $is_customer_note, $added_by_user ).
+					// `false, true` keeps the note internal and records the signed-in
+					// administrator as its author instead of filing it as "system".
+					if ( trim( $body['note'] ) ) { $order->add_order_note( sanitize_textarea_field( $body['note'] ), false, true ); $fields[] = 'note'; }
 				}
 				if ( ! $fields ) { return self::error( 'empty_update', 'No order changes were provided.' ); }
 				$order->save();
