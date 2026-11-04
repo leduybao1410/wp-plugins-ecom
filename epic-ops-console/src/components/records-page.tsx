@@ -49,6 +49,7 @@ export function RecordsPage({ module, title, resource }: { module: string; title
   const [reconciliationTracking, setReconciliationTracking] = useState("");
   const [linkingShipment, setLinkingShipment] = useState(false);
   const [manualShipmentStatus, setManualShipmentStatus] = useState("");
+  const [orderNote, setOrderNote] = useState("");
   const [labelShowPostage, setLabelShowPostage] = useState(true);
   const [notice, setNotice] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, string[]>>({});
@@ -70,12 +71,13 @@ export function RecordsPage({ module, title, resource }: { module: string; title
       window.history.pushState(null, "", `${current.pathname}${current.search}`);
       pushedDetailRef.current = true;
     }
-    setSelected(row); setRecordDetail(row); setRecordDetailBusy(Boolean(row.id)); setNotice(""); setReconciliationTracking(""); setLinkingShipment(false); setManualShipmentStatus(String(row.shipment_status_code ?? "")); setLabelShowPostage(labelOptions(row).defaultShowPostage);
+    setSelected(row); setRecordDetail(row); setRecordDetailBusy(Boolean(row.id)); setNotice(""); setReconciliationTracking(""); setLinkingShipment(false); setManualShipmentStatus(String(row.shipment_status_code ?? "")); setOrderNote(""); setLabelShowPostage(labelOptions(row).defaultShowPostage);
     if (row.id) {
       const detailsUrl = new URL(`/api/dashboard/${endpoint}/${row.id}`, window.location.origin);
       if (typeof row._source === "string") detailsUrl.searchParams.set("source", row._source);
       try {
-        const response = await apiFetch(detailsUrl);
+        // apiFetch takes a path string; a URL object would throw before the request.
+        const response = await apiFetch(`${detailsUrl.pathname}${detailsUrl.search}`);
         const payload = await response.json();
         if (requestId !== detailRequestSeq.current) return;
         if (response.ok) {
@@ -84,6 +86,9 @@ export function RecordsPage({ module, title, resource }: { module: string; title
           if (module === "products") setSelected(detail);
           if (typeof detail.shipment_status_code === "string") setManualShipmentStatus(detail.shipment_status_code);
           setLabelShowPostage(labelOptions(detail).defaultShowPostage);
+          // Prefill the note editor with the last hand-written note, without
+          // overwriting anything the user already typed.
+          if (module === "orders") setOrderNote((current) => current || latestOrderNote(detail));
         }
         else setNotice(payload.error || "Không tải được chi tiết bản ghi");
       } catch {
@@ -178,6 +183,17 @@ export function RecordsPage({ module, title, resource }: { module: string; title
     const response = await apiFetch(`/api/dashboard/shipments/${selected.id}`);
     if (response.ok) { const payload = await response.json(); setRecordDetail(payload); if (typeof payload.shipment_status_code === "string") setManualShipmentStatus(payload.shipment_status_code); setLabelShowPostage(labelOptions(payload).defaultShowPostage); }
   }
+  /** Re-read the open record so a retry uses the latest revision. */
+  async function reloadRecordDetail() {
+    if (!selected?.id) return;
+    try {
+      const response = await apiFetch(`/api/dashboard/${endpoint}/${selected.id}`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      setRecordDetail(module === "orders" ? normalizeOrderDetail(payload) : payload);
+      if (typeof payload.shipment_status_code === "string") setManualShipmentStatus(payload.shipment_status_code);
+    } catch { /* keep the current detail; the notice already explains the failure */ }
+  }
   function writeListUrl(nextPage: number, nextStatus: string, nextSearch: string, push = false) {
     const url = new URL(window.location.href);
     url.searchParams.set("page", String(nextPage)); url.searchParams.set("per_page", "20");
@@ -190,21 +206,29 @@ export function RecordsPage({ module, title, resource }: { module: string; title
   }
   function setListPage(nextPage: number) { setPage(nextPage); writeListUrl(nextPage, statusFilter, queryRef.current, true); }
   async function submitSearch(event: FormEvent) { event.preventDefault(); queryRef.current = query; setPage(1); writeListUrl(1, statusFilter, query, true); await load(1); }
-  async function updateRecord(changes: Record<string, unknown>) {
-    if (!selected?.id) return false;
+  async function updateRecord(changes: Record<string, unknown>): Promise<{ ok: boolean; status: number; message: string }> {
+    if (!selected?.id) return { ok: false, status: 0, message: "" };
     setBusy(true); setNotice("");
     try {
       const response = await apiFetch(`/api/dashboard/${endpoint}/${selected.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Không lưu được thay đổi");
+      if (!response.ok) {
+        // WordPress REST errors carry `message`; the BFF uses `error`.
+        const message = payload.error || payload.message || "Không lưu được thay đổi";
+        setNotice(message);
+        return { ok: false, status: response.status, message };
+      }
       dirtyRef.current = false;
-      setNotice("Đã lưu thay đổi."); await load();
+      await load();
       const refreshed = await apiFetch(`/api/dashboard/${endpoint}/${selected.id}`);
-      if (refreshed.ok) setRecordDetail(await refreshed.json());
-      return true;
-    } catch (e) { setNotice(e instanceof Error ? e.message : "Không lưu được thay đổi"); }
-    finally { setBusy(false); }
-    return false;
+      if (refreshed.ok) { const detail = await refreshed.json(); setRecordDetail(module === "orders" ? normalizeOrderDetail(detail) : detail); }
+      setNotice("Đã lưu thay đổi.");
+      return { ok: true, status: response.status, message: "" };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Không lưu được thay đổi";
+      setNotice(message);
+      return { ok: false, status: 0, message };
+    } finally { setBusy(false); }
   }
   async function deleteRecord() {
     if (!selected?.id || !window.confirm("Xóa đánh giá này khỏi hồ sơ sản phẩm? Thao tác này không thể hoàn tác.")) return;
@@ -353,8 +377,8 @@ export function RecordsPage({ module, title, resource }: { module: string; title
           }) : Array.isArray(recordDetail.items) ? <p className="muted">Đơn hàng chưa có sản phẩm.</p> : <p className="muted">Không có dữ liệu sản phẩm cho đơn hàng này.</p>}
         </section>}
 		{module === "wholesale-orders" && Array.isArray(recordDetail?.items) && <section style={{ marginTop: 18 }}><h3 style={{ fontSize: 14 }}>Sản phẩm trong đơn bán sỉ</h3>{(recordDetail.items as RecordRow[]).map((item, index) => <div key={`${String(item.product_id)}-${index}`} className="alert-row"><span><strong>{String(item.name || "Sản phẩm")}</strong><small style={{ display: "block", color: "var(--muted)", marginTop: 3 }}>SKU {String(item.sku || "—")} · {String(item.quantity || 0)} sản phẩm · {String(item.unit_price || "Chưa chốt giá")}</small></span><strong>{item.line_total == null || item.line_total === "" ? "—" : Number(item.line_total).toLocaleString("vi-VN")}</strong></div>)}<p className="muted">Tổng đơn bán sỉ: {recordDetail.total == null ? "Chưa chốt giá" : Number(recordDetail.total).toLocaleString("vi-VN")}</p></section>}
-        {module === "orders" && Array.isArray(recordDetail?.notes) && <section style={{ marginTop: 18 }}><h3 style={{ fontSize: 14 }}>Ghi chú đơn hàng</h3>{(recordDetail.notes as RecordRow[]).map((note, index) => <div key={String(note.id ?? index)} className="alert-row" style={{ display: "block" }}><small className="muted">{formatCell("date", note.date_created)}{note.customer_note ? " · Gửi cho khách" : " · Nội bộ"}</small><p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{String(note.content || "")}</p></div>)}{recordDetail.notes.length === 0 && <p className="muted">Chưa có ghi chú.</p>}</section>}
-		{module === "orders" && <div className="detail-actions record-edit-actions" onChange={() => { dirtyRef.current = true; }} key={String(recordDetail?.revision ?? selected.id)}><label htmlFor="order-status">Trạng thái đơn hàng</label><select id="order-status" className="search-input" defaultValue={String(recordDetail?.status || "")}><option value="pending">Chờ thanh toán</option><option value="processing">Đang xử lý</option><option value="on-hold">Tạm giữ</option><option value="completed">Hoàn tất</option><option value="cancelled">Đã hủy</option></select><label htmlFor="order-note">Ghi chú đơn hàng</label><textarea id="order-note" className="search-input" style={{ height: 90, padding: 10 }} placeholder="Ghi chú nội bộ…"/><button className="action-button" disabled={busy || typeof recordDetail?.revision !== "string"} onClick={() => { const status = (document.getElementById("order-status") as HTMLSelectElement).value; const note = (document.getElementById("order-note") as HTMLTextAreaElement).value; if (status !== String(recordDetail?.status) && ["completed", "cancelled"].includes(status) && !window.confirm(`Xác nhận chuyển đơn sang trạng thái “${status}”?`)) return; void updateRecord({ status, note, expected_revision: recordDetail?.revision }); }}>Lưu thay đổi</button>{recordDetail?.source === "direct" && typeof recordDetail?.revision === "string" && <button className="quiet-button" type="button" disabled={busy} onClick={() => { if (dirtyRef.current && !window.confirm("Bạn có thay đổi chưa lưu. Mở trình sửa đơn và bỏ các thay đổi này?")) return; setEditingOrder(recordDetail); }}>Sửa đơn trực tiếp</button>}</div>}
+        {module === "orders" && Array.isArray(recordDetail?.notes) && <section style={{ marginTop: 18 }}><h3 style={{ fontSize: 14 }}>Ghi chú đơn hàng</h3>{(recordDetail.notes as RecordRow[]).map((note, index) => <div key={String(note.id ?? index)} className="alert-row" style={{ display: "block" }}><small className="muted">{formatCell("date", noteTimestamp(note.date_created))}{note.customer_note ? " · Gửi cho khách" : " · Nội bộ"}</small><p style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{String(note.content || "")}</p></div>)}{recordDetail.notes.length === 0 && <p className="muted">Chưa có ghi chú.</p>}</section>}
+		{module === "orders" && <div className="detail-actions record-edit-actions" onChange={() => { dirtyRef.current = true; }} key={String(recordDetail?.revision ?? selected.id)}><label htmlFor="order-status">Trạng thái đơn hàng</label><select id="order-status" className="search-input" defaultValue={String(recordDetail?.status || "")}><option value="pending">Chờ thanh toán</option><option value="processing">Đang xử lý</option><option value="on-hold">Tạm giữ</option><option value="completed">Hoàn tất</option><option value="cancelled">Đã hủy</option><option value="refunded">Đã hoàn tiền</option><option value="failed">Thất bại</option></select><label htmlFor="order-note">Ghi chú đơn hàng</label><textarea id="order-note" className="search-input" style={{ height: 90, padding: 10 }} placeholder="Ghi chú nội bộ…" value={orderNote} onChange={(event) => { setOrderNote(event.target.value); dirtyRef.current = true; }}/><button className="action-button" disabled={busy || typeof recordDetail?.revision !== "string"} onClick={async () => { const status = (document.getElementById("order-status") as HTMLSelectElement).value; if (status !== String(recordDetail?.status) && ["completed", "cancelled"].includes(status) && !window.confirm(`Xác nhận chuyển đơn sang trạng thái “${status}”?`)) return; const existingNote = latestOrderNote(recordDetail); const note = orderNote.trim() && orderNote.trim() !== existingNote ? orderNote : ""; const result = await updateRecord({ status, note, expected_revision: recordDetail?.revision }); if (result.ok) return; if (result.status === 409) { await reloadRecordDetail(); setNotice("Đơn vừa được cập nhật ở nơi khác. Dữ liệu đã được làm mới — bấm “Lưu thay đổi” để lưu lại ghi chú."); } }}>Lưu thay đổi</button>{recordDetail?.source === "direct" && typeof recordDetail?.revision === "string" && <button className="quiet-button" type="button" disabled={busy} onClick={() => { if (dirtyRef.current && !window.confirm("Bạn có thay đổi chưa lưu. Mở trình sửa đơn và bỏ các thay đổi này?")) return; setEditingOrder(recordDetail); }}>Sửa đơn trực tiếp</button>}</div>}
 		{module === "wholesale-orders" && <div className="detail-actions record-edit-actions" onChange={() => { dirtyRef.current = true; }} key={String(recordDetail?.revision ?? selected.id)}><label htmlFor="wholesale-order-status">Trạng thái đơn bán sỉ</label><select id="wholesale-order-status" className="search-input" defaultValue={String(recordDetail?.order_status_key || "pending")}>{Object.entries((recordDetail?.status_options ?? {}) as Record<string, string>).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><label htmlFor="wholesale-unapprove-reason">Lý do không duyệt (bắt buộc nếu không duyệt)</label><textarea id="wholesale-unapprove-reason" className="search-input" style={{ height: 80, padding: 10 }} defaultValue={String(recordDetail?.cancel_reason || "")} /><button className="action-button" disabled={busy || typeof recordDetail?.revision !== "string"} onClick={() => { const orderStatus = (document.getElementById("wholesale-order-status") as HTMLSelectElement).value; const cancelReason = (document.getElementById("wholesale-unapprove-reason") as HTMLTextAreaElement).value; if (!window.confirm(`Xác nhận chuyển đơn bán sỉ sang trạng thái “${orderStatus}”?`)) return; void updateRecord({ order_status: orderStatus, cancel_reason: cancelReason, expected_revision: recordDetail?.revision }); }}>Lưu trạng thái bán sỉ</button><p className="muted">Trạng thái thanh toán: <strong>{String(recordDetail?.payment_status || "—")}</strong>. Dashboard chỉ xem thông tin thanh toán, không xác nhận đã thanh toán.</p>{recordDetail !== null && Boolean(recordDetail.has_invoice) && typeof recordDetail.invoice_edit_url === "string" && <a href={recordDetail.invoice_edit_url} target="_blank" rel="noreferrer">Mở hồ sơ hóa đơn trong wp-admin ↗</a>}</div>}
         {module === "reviews" && <div className="detail-actions record-edit-actions" style={{ display: "flex", gap: 8, marginTop: 22, flexWrap: "wrap" }}><button className="action-button" disabled={busy || typeof recordDetail?.revision !== "string"} onClick={() => void updateRecord({ status: "approved", expected_revision: recordDetail?.revision })}>Duyệt đánh giá</button><button className="quiet-button" disabled={busy || typeof recordDetail?.revision !== "string"} onClick={() => void updateRecord({ status: "pending", expected_revision: recordDetail?.revision })}>Giữ chờ duyệt</button><button className="quiet-button" disabled={busy} onClick={() => void deleteRecord()}>Xóa đánh giá</button></div>}
 		{module === "leads" && <div className="detail-actions record-edit-actions" style={{ display: "flex", gap: 8, marginTop: 22 }}><button className="quiet-button" disabled={busy || typeof recordDetail?.revision !== "string" || typeof recordDetail?._source !== "string"} onClick={() => void deleteLead()}>Xóa yêu cầu đã rà soát</button><small className="muted">Xóa vĩnh viễn bản ghi PII trong nguồn WordPress hiện có.</small></div>}
@@ -540,7 +564,7 @@ function VariationEditor({ productId, variation, onSaved }: { productId: number;
   return <div className="card variation-card"><div className="toolbar"><span><strong>{String(variation.name || `Biến thể #${variation.id}`)}</strong><small className="muted" style={{ display: "block" }}>SKU {String(variation.sku || "—")} · {JSON.stringify(variation.attributes ?? [])}</small></span><button className="quiet-button" type="button" onClick={() => setOpen((value) => !value)}>{open ? "Đóng" : "Chỉnh sửa"}</button></div>{open && <div style={{ display: "grid", gap: 9, padding: 14 }}><label htmlFor={`variation-price-${variation.id}`}>Giá niêm yết</label><input id={`variation-price-${variation.id}`} className="search-input" inputMode="decimal" value={regularPrice} onChange={(e) => setRegularPrice(e.target.value)} /><label htmlFor={`variation-sale-${variation.id}`}>Giá khuyến mãi</label><input id={`variation-sale-${variation.id}`} className="search-input" inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} /><label htmlFor={`variation-stock-${variation.id}`}>Tồn kho</label><input id={`variation-stock-${variation.id}`} className="search-input" inputMode="numeric" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} /><label><input type="checkbox" checked={manageStock} onChange={(e) => setManageStock(e.target.checked)} /> Quản lý số lượng tồn</label><label htmlFor={`variation-stock-status-${variation.id}`}>Trạng thái kho</label><select id={`variation-stock-status-${variation.id}`} className="search-input" value={stockStatus} onChange={(e) => setStockStatus(e.target.value)}><option value="instock">Còn hàng</option><option value="outofstock">Hết hàng</option><option value="onbackorder">Đặt trước</option></select>{error && <div className="error-box" role="alert">{error}</div>}<button className="quiet-button" type="button" disabled={busy} onClick={() => void requestPreview()}>Xem trước biến thể</button>{preview && <><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(preview, null, 2)}</pre><button className="action-button" type="button" disabled={busy} onClick={() => void applyPreview()}>Áp dụng thay đổi</button></>}</div>}</div>;
 }
 
-function ContentEditor({ record, busy, onSave, onError, onDirtyChange }: { record: RecordRow; busy: boolean; onSave: (changes: Record<string, unknown>) => Promise<boolean>; onError: (message: string) => void; onDirtyChange: (dirty: boolean) => void }) {
+function ContentEditor({ record, busy, onSave, onError, onDirtyChange }: { record: RecordRow; busy: boolean; onSave: (changes: Record<string, unknown>) => Promise<{ ok: boolean }>; onError: (message: string) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [title, setTitle] = useState(String(record.title ?? ""));
   const [excerpt, setExcerpt] = useState(String(record.excerpt ?? ""));
   const [content, setContent] = useState(String(record.content ?? ""));
@@ -549,7 +573,7 @@ function ContentEditor({ record, busy, onSave, onError, onDirtyChange }: { recor
   async function save(nextStatus = status) {
     if (nextStatus === "publish" && !window.confirm("Đã xem trước nội dung và muốn xuất bản bài viết này?")) return;
     onError("");
-    if (await onSave({ title, excerpt, content, status: nextStatus, expected_revision: record.revision, ...(nextStatus === "publish" ? { confirm_publish: true } : {}) })) onDirtyChange(false);
+    if ((await onSave({ title, excerpt, content, status: nextStatus, expected_revision: record.revision, ...(nextStatus === "publish" ? { confirm_publish: true } : {}) })).ok) onDirtyChange(false);
   }
   return <div onChange={() => onDirtyChange(true)} style={{ display: "grid", gap: 10, marginTop: 22, borderTop: "1px solid var(--line)", paddingTop: 18 }}>
     <h3 style={{ margin: 0, fontSize: 14 }}>Chỉnh sửa bài viết</h3>
@@ -584,6 +608,45 @@ function formatMoney(value: unknown, currency: unknown) {
   const code = typeof currency === "string" && /^[A-Z]{3}$/.test(currency) ? currency : "VND";
   try { return new Intl.NumberFormat("vi-VN", { style: "currency", currency: code, maximumFractionDigits: code === "VND" ? 0 : 2 }).format(numeric); }
   catch { return `${numeric.toLocaleString("vi-VN")} ${code}`; }
+}
+
+/** Opening phrases of notes WooCommerce or the courier writes by themselves. */
+const automatedNotePrefixes = [
+  "Order status changed",
+  "Email \"",
+  "Note added by ",
+  "Stock levels reduced",
+  "Stock levels restored",
+  "Payment complete",
+  "Order pending payment",
+  "ViettelPost",
+];
+
+/** The newest note a person wrote on the order, preferring internal notes. */
+function latestOrderNote(detail: RecordRow | null): string {
+  const notes = (Array.isArray(detail?.notes) ? detail.notes as RecordRow[] : [])
+    .slice()
+    .sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
+  const usable = notes.filter((note) => {
+    const content = String(note.content ?? "").trim();
+    if (!content) return false;
+    // WooCommerce returns the author's name for hand-written notes and
+    // "system" for automation. Older dashboard notes were saved as automation,
+    // so fall back to matching the opening phrases of generated notes.
+    if (typeof note.added_by === "string" && note.added_by && note.added_by !== "system") return true;
+    return !automatedNotePrefixes.some((prefix) => content.startsWith(prefix));
+  });
+  const chosen = usable.find((note) => !note.customer_note) ?? usable[0];
+  return chosen ? String(chosen.content ?? "").trim() : "";
+}
+
+/** Order notes expose `date_created` as `{ date, timezone, timezone_type }`. */
+function noteTimestamp(value: unknown): string {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const date = (value as RecordRow).date;
+    if (typeof date === "string") return date;
+  }
+  return typeof value === "string" ? value : "";
 }
 
 function normalizeOrderDetail(value: unknown): RecordRow {
