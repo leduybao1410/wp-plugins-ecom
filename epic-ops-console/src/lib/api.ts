@@ -9,6 +9,17 @@
 import { EXPORT_ROUTES, mapToWordPress } from "@/lib/route-map";
 
 const API_ROOT = (window.EPIC_OPS?.apiRoot ?? "/wp-json/epic-admin/v1").replace(/\/$/, "");
+const TRANSLATION_API_ROOT = (window.EPIC_OPS?.translationApiRoot ?? "/wp-json/epic-translation/v1").replace(/\/$/, "");
+
+export async function translationFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = window.EPIC_OPS?.token;
+  if (token) headers.set("X-Epic-Admin-Session", token);
+  if (init.body !== undefined && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const response = await fetch(`${TRANSLATION_API_ROOT}/${path.replace(/^\/+/, "")}`, { ...init, headers, credentials: "omit", cache: "no-store" });
+  if (response.status === 401) reloadOnceForExpiredSession();
+  return response;
+}
 
 function decodeBase64(value: string): Uint8Array {
   const binary = window.atob(value);
@@ -51,7 +62,7 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
 
   if (response.status === 401) reloadOnceForExpiredSession();
 
-  const exportRoute = EXPORT_ROUTES.has(wordpressPath) || /^mail-campaigns\/(?:\d+\/export|sample)$/.test(wordpressPath);
+  const exportRoute = EXPORT_ROUTES.has(wordpressPath) || /^mail-campaigns\/(?:\d+\/export|sample)$/.test(wordpressPath) || /^events\/\d+\/registrations\/export$/.test(wordpressPath);
   if (!exportRoute || !response.ok) return response;
 
   const payload = (await response.json()) as { filename?: string; content_type?: string; data_base64?: string };

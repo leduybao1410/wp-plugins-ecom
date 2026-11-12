@@ -3,10 +3,13 @@ import { Navigation } from "@/components/navigation";
 import { ThemeControl } from "@/components/theme-control";
 import { LogoutButton } from "@/components/logout-button";
 import { Overview } from "@/components/overview";
+import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { RecordsPage } from "@/components/records-page";
 import { RecordsHub, SettingsPage } from "@/components/hub-pages";
 import { SupportConversations } from "@/components/support-conversations";
 import { FaqManager } from "@/components/faq-manager";
+import { EventManager } from "@/components/event-manager";
+import { TranslationWorkspace } from "@/components/translation-workspace";
 import { modules } from "@/lib/modules";
 import { Link, usePathname } from "@/lib/router";
 
@@ -14,6 +17,9 @@ function resolveRoute(pathname: string) {
   if (pathname === "/" || pathname === "") return <Overview />;
   if (pathname === "/support/conversations" || pathname.startsWith("/support/conversations/")) return <SupportConversations />;
   if (pathname === "/faqs") return <FaqManager />;
+  if (pathname === "/events") return <EventManager />;
+  if (pathname === "/translation") return <TranslationWorkspace />;
+  if (pathname === "/analytics") return <AnalyticsDashboard />;
   const definition = modules.find((item) => item.href === pathname);
   if (!definition) return <NotFound pathname={pathname} />;
   if (definition.id === "finance" || definition.id === "marketing") return <RecordsHub module={definition.id} title={definition.label} />;

@@ -22,6 +22,7 @@ final class Epic_Ops_Template {
 		$config = array(
 			'base'      => '/ops',
 			'apiRoot'   => esc_url_raw( rest_url( 'epic-admin/v1' ) ),
+			'translationApiRoot' => esc_url_raw( rest_url( 'epic-translation/v1' ) ),
 			'token'     => $token,
 			'logoutUrl' => wp_logout_url( home_url( '/' ) ),
 			'user'      => array(

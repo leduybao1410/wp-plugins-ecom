@@ -5,20 +5,20 @@ import { apiFetch } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import Link from "@/lib/router";
-import { usePathname } from "@/lib/router";
+import { usePathname, withBase } from "@/lib/router";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Activity, Boxes, ChevronDown, Command, Home, Menu, MessageSquareText, Package, Search, Settings2, ShoppingBag, Truck, Users, X, MessageCircleQuestion } from "lucide-react";
+import { Activity, BarChart3, Boxes, CalendarDays, ChevronDown, Command, Home, Menu, MessageSquareText, Package, Search, Settings2, ShoppingBag, Truck, Users, X, MessageCircleQuestion } from "lucide-react";
 import { modules } from "@/lib/modules";
 import { detectRecordCode, mapLookupItems } from "@/lib/record-lookup.js";
 
 type LookupResult = { kind: "order" | "shipment"; id: number; label: string; sublabel: string; href: string };
 
-const icons = { overview: Home, orders: ShoppingBag, shipments: Truck, products: Package, customers: Users, support: MessageSquareText, faqs: MessageCircleQuestion, leads: Users, "wholesale-orders": Boxes, content: Package, marketing: Activity, reviews: Activity, finance: Activity, settings: Settings2 };
+const icons = { overview: Home, analytics: BarChart3, orders: ShoppingBag, shipments: Truck, products: Package, customers: Users, support: MessageSquareText, faqs: MessageCircleQuestion, leads: Users, "wholesale-orders": Boxes, content: Package, events: CalendarDays, marketing: Activity, reviews: Activity, finance: Activity, translation: MessageSquareText, settings: Settings2 };
 const groups = [
-  { label: "Tổng quan", ids: ["overview"] },
+  { label: "Tổng quan", ids: ["overview", "analytics"] },
   { label: "Vận hành", ids: ["orders", "shipments", "wholesale-orders"] },
   { label: "Quan hệ khách hàng", ids: ["customers", "support", "faqs", "leads", "reviews"] },
-  { label: "Danh mục & tiếp thị", ids: ["products", "content", "marketing"] },
+  { label: "Danh mục & tiếp thị", ids: ["products", "content", "translation", "events", "marketing"] },
   { label: "Quản lý", ids: ["finance", "settings"] },
 ];
 
@@ -77,7 +77,7 @@ export function Navigation() {
   function openLookup(href: string) {
     if (!href) return;
     setLauncherOpen(false); setQuery(""); setActiveOption(null);
-    window.location.assign(href);
+    window.location.assign(withBase(href));
   }
 
   function onLauncherKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {

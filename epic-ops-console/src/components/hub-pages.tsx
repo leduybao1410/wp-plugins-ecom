@@ -38,12 +38,19 @@ type AuditRow = { id: number; user_id: number; action: string; resource: string;
 
 export function SettingsPage() {
   const [health, setHealth] = useState<Health | null>(null);
+  const [analytics, setAnalytics] = useState<{ reachable?: boolean; project?: string; error?: string } | null>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
     Promise.all([apiFetch("/api/dashboard/health").then((r) => r.json()), apiFetch("/api/dashboard/audit?per_page=8").then((r) => r.json())])
       .then(([state, entries]) => { if (state.error || entries.error) throw new Error(state.error || entries.error); setHealth(state); setAudit(entries.items ?? []); })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Không tải được cài đặt"));
+  }, []);
+  useEffect(() => {
+    apiFetch("/api/dashboard/analytics?view=health")
+      .then((r) => r.json())
+      .then((state) => setAnalytics(state))
+      .catch(() => setAnalytics({ reachable: false }));
   }, []);
   return <>
     <div className="page-heading"><div><div className="eyebrow">EPIC / Quản trị</div><h1>Cài đặt kinh doanh</h1><p>Kiểm tra kết nối, lịch sử thao tác và truy cập cấu hình WordPress.</p></div></div>
@@ -52,6 +59,7 @@ export function SettingsPage() {
       <section className="card section-card"><h2>Tình trạng kết nối</h2>
         <HealthRow label="WordPress" ready={health?.wordpress} />
         <HealthRow label="WooCommerce" ready={health?.woocommerce} />
+        <div className="alert-row"><span>PostHog phân tích{analytics?.project ? ` #${analytics.project}` : ""}</span><span className="status" data-status={analytics?.reachable ? "approved" : analytics ? "failed" : "pending"} title={analytics?.error}>{analytics ? (analytics.reachable ? "Đang hoạt động" : "Chưa khả dụng") : "Chưa kiểm tra"}</span></div>
         {(Object.entries(health?.plugins ?? {}) as [string, boolean][]).map(([name, ready]) => <HealthRow key={name} label={name.replace(/^epic-/, "").replaceAll("-", " ")} ready={ready} />)}
         {!health && <p className="muted">Đang kiểm tra…</p>}
       </section>

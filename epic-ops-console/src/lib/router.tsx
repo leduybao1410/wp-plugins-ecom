@@ -17,7 +17,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("popstate", emit);
 }
 
-function withBase(to: string) {
+export function withBase(to: string) {
   if (!BASE) return to;
   if (to === "/") return BASE;
   if (to === BASE || to.startsWith(`${BASE}/`) || to.startsWith(`${BASE}?`)) return to;

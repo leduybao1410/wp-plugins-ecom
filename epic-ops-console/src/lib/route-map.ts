@@ -17,11 +17,14 @@ export function mapToWordPress(relativePath: string, method = "GET"): string {
   if (!first) throw new Error("Unknown dashboard route");
 
   if (first === "overview" || first === "health" || first === "audit") return first;
+  if (first === "analytics") return "analytics";
+  if (first === "inventory" && (!second || ["history", "adjust"].includes(second)) && !third && !fourth) return segments.join("/");
   if (first === "product-change") return `products/change/${second ?? ""}`;
   if (first === "orders" && (second === "preview" || second === "apply")) return `orders/${second}`;
   if (first === "finance" && second === "export") return "finance/export";
   if (first === "support") return segments.join("/");
   if (first === "faqs") return segments.join("/");
+  if (first === "events" || first === "registrations") return segments.join("/");
   if (first === "address") return segments.join("/");
   if (first === "shipping") return segments.join("/");
   if (first === "wholesale" && second === "settings") return "wholesale/settings";

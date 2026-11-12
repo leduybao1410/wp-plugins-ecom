@@ -2,7 +2,7 @@
 /**
  * Plugin Name: EPIC Ops Console
  * Description: Serves the EPIC operations dashboard directly from this WordPress site at /ops, replacing the separate operations host.
- * Version: 0.1.2
+ * Version: 0.1.20
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: EPIC Coffee Roastery
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-define( 'EPIC_OPS_CONSOLE_VERSION', '0.1.2' );
+define( 'EPIC_OPS_CONSOLE_VERSION', '0.1.20' );
 define( 'EPIC_OPS_CONSOLE_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EPIC_OPS_CONSOLE_URL', plugin_dir_url( __FILE__ ) );
 
